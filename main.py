@@ -28,6 +28,7 @@ from config import (
     WEB_PORT,
     STT_SILENCE_THRESHOLD,
     STT_SILENCE_CUTOFF_SEC,
+    STT_CAPTURE_MODE,
 )
 from stt import AzureSTT
 from llm_client import LLMClient
@@ -52,6 +53,7 @@ class NeuroClone:
             device_index=AUDIO_DEVICE_INDEX,
             silence_threshold=STT_SILENCE_THRESHOLD,
             silence_cutoff_sec=STT_SILENCE_CUTOFF_SEC,
+            capture_mode=STT_CAPTURE_MODE,
         )
         self.stt.on_status = self._on_stt_status
 

@@ -60,6 +60,13 @@ Edit `.env` with your:
 - Windows Sound Settings → Recording → Set **VB-CABLE Input** as default mic
 - This way TTS audio gets broadcast as your voice in VRChat
 
+**Note on STT capture mode:**
+- `STT_CAPTURE_MODE=loopback` (default) — captures **desktop audio output** (what you hear from VRChat)
+  - This means it hears **other people talking in VRChat** directly
+  - No extra software needed on Windows (uses WASAPI loopback)
+  - If no loopback device found, enable **Stereo Mix** in Windows Sound settings → Recording tab
+- `STT_CAPTURE_MODE=microphone` — captures from your microphone instead
+
 ### 5. Run
 
 ```bash
