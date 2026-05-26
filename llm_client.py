@@ -11,8 +11,8 @@ class LLMClient:
     def __init__(
         self,
         api_key: str,
-        base_url: str = "http://localhost:8080/v1",
-        model: str = "gpt-4o-mini",
+        base_url: str = "https://opencode.ai/zen/go/v1",
+        model: str = "DeepSeek V4 Flash",
         system_prompt: str = "",
     ):
         self.client = OpenAI(api_key=api_key, base_url=base_url)
