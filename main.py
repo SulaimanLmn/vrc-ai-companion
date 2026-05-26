@@ -29,6 +29,7 @@ from config import (
     STT_SILENCE_THRESHOLD,
     STT_SILENCE_CUTOFF_SEC,
     STT_CAPTURE_MODE,
+    TTS_OUTPUT_DEVICE,
 )
 from stt import AzureSTT
 from llm_client import LLMClient
@@ -68,6 +69,7 @@ class NeuroClone:
         self.tts = AzureTTS(
             subscription_key=AZURE_SPEECH_KEY,
             region=AZURE_SPEECH_REGION,
+            output_device=TTS_OUTPUT_DEVICE,
         )
         self.tts.on_status = self._on_tts_status
         self.tts.on_speaking_start = lambda: setattr(self, "is_speaking", True) or self._broadcast_status()

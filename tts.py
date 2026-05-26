@@ -18,10 +18,12 @@ class AzureTTS:
         subscription_key: str,
         region: str,
         voice: str = "en-US-AriaNeural",
+        output_device: str = "",
     ):
         self.subscription_key = subscription_key
         self.region = region
         self.voice = voice
+        self.output_device = output_device  # e.g., "CABLE Input" - for documentation only, Azure uses default
         self._queue = queue.Queue()
         self._running = False
         self._thread = None
@@ -72,7 +74,7 @@ class AzureTTS:
         )
         speech_config.speech_synthesis_voice_name = self.voice
 
-        # Use default speaker
+        # Use default speaker (set VB-CABLE as default in Windows for VRChat integration)
         audio_config = speechsdk.audio.AudioOutputConfig(
             use_default_speaker=True
         )
