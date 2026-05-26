@@ -82,7 +82,7 @@ OFF ──[Enable]──► ON ──[PTT toggle]──► LISTENING (PTT)
 | `AZURE_SPEECH_REGION` | Azure region | `eastasia` |
 | `OPENCODE_GO_API_KEY` | LLM API key | (required) |
 | `OPENCODE_GO_BASE_URL` | LLM API endpoint | `https://opencode.ai/zen/go/v1` |
-| `OPENCODE_GO_MODEL` | LLM model name | `DeepSeek V4 Flash` |
+| `OPENCODE_GO_MODEL` | LLM model name | `mimo-v2.5-pro` |
 | `STT_CAPTURE_MODE` | `loopback` (desktop audio) or `microphone` | `loopback` |
 | `STT_SILENCE_THRESHOLD` | Amplitude threshold for speech detection | `500` |
 | `STT_SILENCE_CUTOFF_SEC` | Seconds of silence before transcribing | `2.0` |
@@ -111,7 +111,7 @@ OFF ──[Enable]──► ON ──[PTT toggle]──► LISTENING (PTT)
 - OpenAI-compatible API client (works with OpenCode Go)
 - Maintains conversation history (last 20 messages)
 - Supports both blocking and streaming responses
-- Default: `https://opencode.ai/zen/go/v1` with `DeepSeek V4 Flash`
+- Default: `https://opencode.ai/zen/go/v1` with `mimo-v2.5-pro`
 
 ### `tts.py` — Text-to-Speech
 - Azure Speech Service TTS
@@ -151,18 +151,17 @@ OFF ──[Enable]──► ON ──[PTT toggle]──► LISTENING (PTT)
 
 ## Available LLM Models (OpenCode Go)
 
-- **DeepSeek V4 Flash** — fastest, cheapest (default)
-- **DeepSeek V4 Pro** — higher quality, slower
-- **Qwen3.6 Plus** — very good quality, good humor
-- **Qwen3.5 Plus** — slightly older Qwen
+- **mimo-v2.5-pro** — recommended (works with full responses, needs ~50+ tokens for short answers)
+- **Qwen3.6 Plus** — very good quality, good humor (more expensive)
+- **Qwen3.5 Plus** — slightly older Qwen (more expensive)
 - **MiniMax M2.7** — great for roleplay/humor
-- **MiniMax M2.5** — older MiniMax
 - **Kimi K2.6** — good but verbose
-- **Kimi K2.5** — older Kimi
-- **MiMo-V2.5-Pro** — multimodal capable
-- **MiMo-V2.5** — basic MiMo
-- **GLM-5.1** — Zhipu model
-- **GLM-5** — older GLM
+- **DeepSeek V4 Flash** — fastest, cheapest (returns empty content)
+- **DeepSeek V4 Pro** — higher quality, slower (returns empty content)
+- **MiniMax M2.5** — older MiniMax (returns empty content)
+- **MiMo-V2.5** — basic MiMo (returns empty content)
+- **GLM-5.1** — Zhipu model (returns empty content)
+- **GLM-5** — older GLM (returns empty content)
 
 ## License
 

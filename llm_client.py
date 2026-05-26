@@ -3,7 +3,6 @@
 Handles chat completions with system prompt and conversation history.
 """
 
-import time
 from openai import OpenAI
 
 
@@ -12,7 +11,7 @@ class LLMClient:
         self,
         api_key: str,
         base_url: str = "https://opencode.ai/zen/go/v1",
-        model: str = "qwen3.6-plus",
+        model: str = "mimo-v2.5-pro",
         system_prompt: str = "",
     ):
         self.client = OpenAI(api_key=api_key, base_url=base_url)
@@ -45,7 +44,9 @@ class LLMClient:
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
-            reply = response.choices[0].message.content or ""
+            choice = response.choices[0]
+            message = choice.message
+            reply = message.content if message.content is not None else ""
             # Add to history
             self.history.append({"role": "user", "content": user_message})
             self.history.append({"role": "assistant", "content": reply})

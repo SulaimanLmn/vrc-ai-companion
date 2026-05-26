@@ -128,11 +128,73 @@ class NeuroClone:
     def test_llm(self) -> dict:
         """Test LLM connection and return result."""
         try:
-            reply = self.llm.chat("Say 'connection test OK' in 3 words", max_tokens=15)
+            reply = self.llm.chat("Say 'connection test OK' in 3 words", max_tokens=100)
             if reply:
                 return {"success": True, "reply": reply}
             else:
                 return {"success": False, "error": "Empty response from LLM"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def test_stt(self) -> dict:
+        """Test STT by transcribing an audio file from audio-test folder."""
+        import os
+        from pathlib import Path
+        import azure.cognitiveservices.speech as speechsdk
+
+        test_dir = Path(__file__).parent / "audio-test"
+        
+        if not test_dir.exists():
+            return {"success": False, "error": "audio-test folder not found"}
+        
+        # Find first audio file
+        audio_files = list(test_dir.glob("*.wav")) + list(test_dir.glob("*.mp3")) + list(test_dir.glob("*.ogg"))
+        if not audio_files:
+            return {"success": False, "error": "No .wav, .mp3, or .ogg files in audio-test folder"}
+
+        try:
+            speech_config = speechsdk.SpeechConfig(
+                subscription=self.stt.subscription_key, region=self.stt.region
+            )
+            speech_config.speech_recognition_language = "en-US"
+
+            audio_config = speechsdk.audio.AudioConfig(filename=str(audio_files[0]))
+            recognizer = speechsdk.SpeechRecognizer(
+                speech_config=speech_config, audio_config=audio_config
+            )
+
+            result_text = ""
+            done = threading.Event()
+
+            def on_recognized(evt):
+                nonlocal result_text
+                if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
+                    result_text = evt.result.text
+
+            recognizer.recognized.connect(on_recognized)
+            recognizer.start_continuous_recognition()
+            
+            # Wait for recognition with timeout
+            for _ in range(30):  # 3 second timeout
+                if result_text:
+                    break
+                time.sleep(0.1)
+
+            recognizer.stop_continuous_recognition()
+            
+            if result_text:
+                return {"success": True, "message": f"Transcribed: '{result_text}' (from {audio_files[0].name})"}
+            else:
+                return {"success": False, "error": "No speech detected in audio file"}
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def test_tts(self) -> dict:
+        """Test TTS by speaking a short phrase."""
+        try:
+            self.tts.enqueue("Text to speech test")
+            return {"success": True, "message": "TTS queued successfully"}
         except Exception as e:
             return {"success": False, "error": str(e)}
 

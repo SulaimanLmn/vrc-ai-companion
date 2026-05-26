@@ -13,7 +13,7 @@ AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "eastasia")
 # LLM (OpenCode Go — OpenAI-compatible)
 OPENCODE_GO_API_KEY = os.getenv("OPENCODE_GO_API_KEY", "")
 OPENCODE_GO_BASE_URL = os.getenv("OPENCODE_GO_BASE_URL", "https://opencode.ai/zen/go/v1")
-OPENCODE_GO_MODEL = os.getenv("OPENCODE_GO_MODEL", "qwen3.6-plus")
+OPENCODE_GO_MODEL = os.getenv("OPENCODE_GO_MODEL", "mimo-v2.5-pro")
 
 # VRChat OSC
 VRC_CHATBOX_IP = os.getenv("VRC_CHATBOX_IP", "127.0.0.1")

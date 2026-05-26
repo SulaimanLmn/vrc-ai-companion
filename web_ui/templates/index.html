@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,7 +20,11 @@
       --purple: #bc8cff;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -72,11 +77,30 @@
       transition: all 0.3s;
     }
 
-    .state-OFF { color: var(--red); border: 2px solid var(--red); }
-    .state-ON { color: var(--green); border: 2px solid var(--green); }
-    .state-LISTENING\ \(PTT\) { color: var(--orange); border: 2px solid var(--orange); }
-    .state-THINKING { color: var(--purple); border: 2px solid var(--purple); }
-    .state-SPEAKING { color: var(--accent); border: 2px solid var(--accent); }
+    .state-OFF {
+      color: var(--red);
+      border: 2px solid var(--red);
+    }
+
+    .state-ON {
+      color: var(--green);
+      border: 2px solid var(--green);
+    }
+
+    .state-LISTENING\ \(PTT\) {
+      color: var(--orange);
+      border: 2px solid var(--orange);
+    }
+
+    .state-THINKING {
+      color: var(--purple);
+      border: 2px solid var(--purple);
+    }
+
+    .state-SPEAKING {
+      color: var(--accent);
+      border: 2px solid var(--accent);
+    }
 
     /* Controls */
     .controls {
@@ -135,8 +159,15 @@
     }
 
     @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(210, 153, 34, 0.4); }
-      50% { box-shadow: 0 0 0 10px rgba(210, 153, 34, 0); }
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(210, 153, 34, 0.4);
+      }
+
+      50% {
+        box-shadow: 0 0 0 10px rgba(210, 153, 34, 0);
+      }
     }
 
     /* Chat log */
@@ -154,7 +185,11 @@
       align-items: center;
     }
 
-    .chat-header h3 { color: var(--muted); font-size: 0.9em; text-transform: uppercase; }
+    .chat-header h3 {
+      color: var(--muted);
+      font-size: 0.9em;
+      text-transform: uppercase;
+    }
 
     .chat-log {
       height: 400px;
@@ -193,8 +228,13 @@
       margin-bottom: 2px;
     }
 
-    .entry-user .entry-label { color: var(--accent); }
-    .entry-assistant .entry-label { color: var(--purple); }
+    .entry-user .entry-label {
+      color: var(--accent);
+    }
+
+    .entry-assistant .entry-label {
+      color: var(--purple);
+    }
 
     /* Manual input */
     .manual-input {
@@ -236,6 +276,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <header>
@@ -248,12 +289,14 @@
       <div class="state-badge state-OFF" id="stateBadge">OFF</div>
     </div>
 
-    <div class="controls">
-      <button class="primary" id="btnToggle" onclick="toggleEnabled()">⚡ Enable</button>
-      <button class="ptt" id="btnPTT" onclick="togglePTT()" disabled>🎤 PTT</button>
-      <button class="danger" id="btnReset" onclick="resetChat()">🗑️ Reset</button>
-      <button id="btnTestLLM" onclick="testLLM()">🔗 Test LLM</button>
-    </div>
+<div class="controls">
+       <button class="primary" id="btnToggle" onclick="toggleEnabled()">⚡ Enable</button>
+       <button class="ptt" id="btnPTT" onclick="togglePTT()" disabled>🎤 PTT</button>
+       <button class="danger" id="btnReset" onclick="resetChat()">🗑️ Reset</button>
+       <button id="btnTestLLM" onclick="testLLM()">🔗 Test LLM</button>
+       <button id="btnTestSTT" onclick="testSTT()">🎤 Test STT</button>
+       <button id="btnTestTTS" onclick="testTTS()">🔊 Test TTS</button>
+     </div>
 
     <div class="chat-section">
       <div class="chat-header">
@@ -263,7 +306,7 @@
       <div class="chat-log" id="chatLog"></div>
       <div class="manual-input">
         <input type="text" id="manualInput" placeholder="Type message manually (or use STT)..."
-               onkeydown="if(event.key==='Enter')sendManual()">
+          onkeydown="if(event.key==='Enter')sendManual()">
         <button onclick="sendManual()">Send</button>
       </div>
     </div>
@@ -326,13 +369,13 @@
     function appendEntry(data) {
       const div = document.createElement('div');
       const roleClass = data.role === 'user' ? 'entry-user'
-                    : data.role === 'assistant' ? 'entry-assistant'
-                    : 'entry-system';
+        : data.role === 'assistant' ? 'entry-assistant'
+          : 'entry-system';
       div.className = 'chat-entry ' + roleClass;
 
       const label = data.role === 'user' ? '👤 Heard'
-               : data.role === 'assistant' ? '🤖 Response'
-               : '⚙️ System';
+        : data.role === 'assistant' ? '🤖 Response'
+          : '⚙️ System';
 
       div.innerHTML = `<div class="entry-label">${label}</div><div>${escapeHtml(data.text)}</div>`;
       chatLog.appendChild(div);
@@ -377,30 +420,80 @@
       });
     }
 
-    function testLLM() {
-      const btn = document.getElementById('btnTestLLM');
-      btn.textContent = '⏳ Testing...';
-      btn.disabled = true;
-      fetch('/api/test_llm', { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-          btn.textContent = '🔗 Test LLM';
-          btn.disabled = false;
-          if (data.success) {
-            btn.style.borderColor = 'var(--green)';
-            btn.style.color = 'var(--green)';
-            alert('LLM works! Response: ' + data.reply);
-          } else {
-            btn.style.borderColor = 'var(--red)';
-            btn.style.color = 'var(--red)';
-            alert('LLM error: ' + data.error);
-          }
-          setTimeout(() => {
-            btn.style.borderColor = '';
-            btn.style.color = '';
-          }, 3000);
-        });
-    }
+function testLLM() {
+       const btn = document.getElementById('btnTestLLM');
+       btn.textContent = '⏳ Testing...';
+       btn.disabled = true;
+       fetch('/api/test_llm', { method: 'POST' })
+         .then(r => r.json())
+         .then(data => {
+           btn.textContent = '🔗 Test LLM';
+           btn.disabled = false;
+           if (data.success) {
+             btn.style.borderColor = 'var(--green)';
+             btn.style.color = 'var(--green)';
+             alert('LLM works! Response: ' + data.reply);
+           } else {
+             btn.style.borderColor = 'var(--red)';
+             btn.style.color = 'var(--red)';
+             alert('LLM error: ' + data.error);
+           }
+           setTimeout(() => {
+             btn.style.borderColor = '';
+             btn.style.color = '';
+           }, 3000);
+         });
+     }
+
+     function testSTT() {
+       const btn = document.getElementById('btnTestSTT');
+       btn.textContent = '⏳ Testing...';
+       btn.disabled = true;
+       fetch('/api/test_stt', { method: 'POST' })
+         .then(r => r.json())
+         .then(data => {
+           btn.textContent = '🎤 Test STT';
+           btn.disabled = false;
+           if (data.success) {
+             btn.style.borderColor = 'var(--green)';
+             btn.style.color = 'var(--green)';
+             alert('STT test: ' + data.message);
+           } else {
+             btn.style.borderColor = 'var(--red)';
+             btn.style.color = 'var(--red)';
+             alert('STT error: ' + data.error);
+           }
+           setTimeout(() => {
+             btn.style.borderColor = '';
+             btn.style.color = '';
+           }, 3000);
+         });
+     }
+
+     function testTTS() {
+       const btn = document.getElementById('btnTestTTS');
+       btn.textContent = '⏳ Testing...';
+       btn.disabled = true;
+       fetch('/api/test_tts', { method: 'POST' })
+         .then(r => r.json())
+         .then(data => {
+           btn.textContent = '🔊 Test TTS';
+           btn.disabled = false;
+           if (data.success) {
+             btn.style.borderColor = 'var(--green)';
+             btn.style.color = 'var(--green)';
+             alert('TTS test: ' + data.message);
+           } else {
+             btn.style.borderColor = 'var(--red)';
+             btn.style.color = 'var(--red)';
+             alert('TTS error: ' + data.error);
+           }
+           setTimeout(() => {
+             btn.style.borderColor = '';
+             btn.style.color = '';
+           }, 3000);
+         });
+     }
 
     // Keyboard shortcuts
     let spaceDown = false;
@@ -436,4 +529,5 @@
     });
   </script>
 </body>
+
 </html>

@@ -55,4 +55,14 @@ def create_app(neuro):
         result = neuro.test_llm()
         return jsonify(result)
 
+    @app.route("/api/test_stt", methods=["POST"])
+    def api_test_stt():
+        result = neuro.test_stt()
+        return jsonify(result)
+
+    @app.route("/api/test_tts", methods=["POST"])
+    def api_test_tts():
+        result = neuro.test_tts()
+        return jsonify(result)
+
     return app
