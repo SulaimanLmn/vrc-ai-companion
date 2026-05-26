@@ -65,4 +65,4 @@ def create_app(neuro):
         result = neuro.test_tts()
         return jsonify(result)
 
-    return app
+    return app, socketio

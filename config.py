@@ -36,8 +36,10 @@ WEB_PORT = int(os.getenv("WEB_PORT", "5000"))
 # STT tuning
 STT_SILENCE_THRESHOLD = int(os.getenv("STT_SILENCE_THRESHOLD", "500"))
 STT_SILENCE_CUTOFF_SEC = float(os.getenv("STT_SILENCE_CUTOFF_SEC", "2.0"))
-STT_CAPTURE_MODE = os.getenv("STT_CAPTURE_MODE", "loopback")  # loopback | microphone
 STT_CAPTURE_MODE = os.getenv("STT_CAPTURE_MODE", "loopback")  # "loopback" or "microphone"
 
 # TTS output device (empty = default speaker, or specify device name/ID)
 TTS_OUTPUT_DEVICE = os.getenv("TTS_OUTPUT_DEVICE", "")
+
+# TTS pitch adjustment in percent (e.g. 35 = +35%, -10 = -10%)
+TTS_PITCH = int(os.getenv("TTS_PITCH", "0"))

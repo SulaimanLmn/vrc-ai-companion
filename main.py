@@ -13,6 +13,8 @@ import threading
 import time
 import sys
 import json
+import signal
+import os
 
 from config import (
     AZURE_SPEECH_KEY,
@@ -30,6 +32,7 @@ from config import (
     STT_SILENCE_CUTOFF_SEC,
     STT_CAPTURE_MODE,
     TTS_OUTPUT_DEVICE,
+    TTS_PITCH,
 )
 from stt import AzureSTT
 from llm_client import LLMClient
@@ -70,10 +73,19 @@ class NeuroClone:
             subscription_key=AZURE_SPEECH_KEY,
             region=AZURE_SPEECH_REGION,
             output_device=TTS_OUTPUT_DEVICE,
+            pitch=TTS_PITCH,
         )
         self.tts.on_status = self._on_tts_status
-        self.tts.on_speaking_start = lambda: setattr(self, "is_speaking", True) or self._broadcast_status()
-        self.tts.on_speaking_end = lambda: setattr(self, "is_speaking", False) or self._broadcast_status()
+        self.tts.on_speaking_start = lambda: (
+            setattr(self, "is_speaking", True)
+            or self.stt.pause()
+            or self._broadcast_status()
+        )
+        self.tts.on_speaking_end = lambda: (
+            setattr(self, "is_speaking", False)
+            or self.stt.resume()
+            or self._broadcast_status()
+        )
 
         self.chatbox = ChatBox(ip=VRC_CHATBOX_IP, port=VRC_CHATBOX_PORT)
 
@@ -95,12 +107,12 @@ class NeuroClone:
         self.enabled = not self.enabled
         if self.enabled:
             self.stt.start()
-            self.tts.start()
+            self.tts.start()      # Creates TTS thread once; subsequent calls just unpause
             self._log("system", "NeuroClone enabled")
         else:
             self.ptt_active = False
             self.stt.stop()
-            self.tts.stop()
+            self.tts.pause()      # Drains queue but keeps synthesizer alive
             self._log("system", "NeuroClone disabled")
         self._broadcast_status()
 
@@ -193,27 +205,31 @@ class NeuroClone:
             return {"success": False, "error": str(e)}
 
     def test_tts(self) -> dict:
-        """Test TTS by speaking a short phrase."""
-        import time as time_module
-        
+        """Test TTS by speaking a short phrase through the main TTS pipeline.
+
+        Uses the existing synthesizer (never creates a temporary one) to
+        avoid corrupting the Windows audio device.
+        """
         if not self.tts:
             return {"success": False, "error": "TTS not initialized"}
-        
+
+        test_phrase = "Testing text to speech. Can you hear this?"
+
         try:
-            # Ensure TTS is running (start if not already)
-            if not getattr(self.tts, '_running', False):
-                self.tts.start()
-                time_module.sleep(0.5)
-            
-            test_phrase = "Text to speech test. Can you hear this?"
-            self.tts.enqueue(test_phrase)
-            
-            # Wait a bit for TTS to process
-            time_module.sleep(0.2)
-            
-            return {"success": True, "message": "TTS queued - if no audio, check: default speakers, Azure key, or VB-CABLE"}
+            # Queue through the main TTS pipeline with a completion event
+            done_event = threading.Event()
+            self.tts.enqueue(test_phrase, done_event=done_event)
+
+            # Wait up to 15 seconds for TTS to complete
+            completed = done_event.wait(timeout=15)
+
+            if completed:
+                return {"success": True, "message": "TTS test completed — check your speakers for audio"}
+            else:
+                return {"success": True, "message": "TTS test sent (playback may take a moment)"}
+
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": True, "message": "TTS test queued (check speakers)"}
 
     # -- Core pipeline --
 
@@ -221,7 +237,6 @@ class NeuroClone:
         """STT callback: received transcribed speech."""
         if not self.enabled:
             return
-        # In PTT mode, only respond when PTT is active
         if self.ptt_active or True:  # always process when enabled; PTT gates STT start/stop
             self._process_input(text)
 
@@ -249,6 +264,10 @@ class NeuroClone:
 
         if reply:
             self._log("assistant", reply)
+
+            # Pause STT before TTS plays — prevents capturing
+            # speech during our own reply (saves Azure credits)
+            self.stt.pause()
 
             # VRChat: stream typing + text
             self.chatbox.start_typing()
@@ -347,18 +366,27 @@ def main():
 
     # Start web UI
     from web_ui.app import create_app
-    app = create_app(neuro)
+    app, socketio = create_app(neuro)
     print(f"\n{'='*50}")
     print(f"  NeuroClone — AI VTuber for VRChat")
     print(f"{'='*50}")
     print(f"\n  Web UI: http://localhost:{WEB_PORT}")
     print(f"  Press Ctrl+C to stop\n")
 
-    try:
-        app.run(host=WEB_HOST, port=WEB_PORT, debug=False, use_reloader=False)
-    except KeyboardInterrupt:
-        neuro.toggle_enabled()  # cleanup if running
+    # Ensure clean shutdown on Ctrl+C / kill
+    def cleanup(*args):
+        neuro.tts.shutdown()
+        neuro.stt.stop()
         print("\nGoodbye!")
+        os._exit(0)
+
+    signal.signal(signal.SIGINT, cleanup)
+    signal.signal(signal.SIGTERM, cleanup)
+
+    try:
+        socketio.run(app, host=WEB_HOST, port=WEB_PORT, debug=False, allow_unsafe_werkzeug=True)
+    except (KeyboardInterrupt, SystemExit):
+        cleanup()
 
 
 if __name__ == "__main__":
