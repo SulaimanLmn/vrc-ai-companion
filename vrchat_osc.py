@@ -4,12 +4,9 @@ Sends chat messages and typing indicators via OSC to VRChat.
 Requires OSC enabled in VRChat settings.
 """
 
-import queue
 import threading
 import time
-import math
 from pythonosc import udp_client
-from pythonosc import osc_message_builder
 
 
 class ChatBox:

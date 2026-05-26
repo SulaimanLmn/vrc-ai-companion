@@ -12,7 +12,7 @@ class LLMClient:
         self,
         api_key: str,
         base_url: str = "https://opencode.ai/zen/go/v1",
-        model: str = "DeepSeek V4 Flash",
+        model: str = "qwen3.6-plus",
         system_prompt: str = "",
     ):
         self.client = OpenAI(api_key=api_key, base_url=base_url)

@@ -96,12 +96,15 @@ class AzureTTS:
                 self.on_speaking_start()
 
             # Sync synthesis — plays through default output
-            result = synthesizer.speak_text_async(text).get()
+            try:
+                result = synthesizer.speak_text_async(text).get()
 
-            if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-                self._status("Done speaking")
-            elif result.reason == speechsdk.ResultReason.Canceled:
-                self._status(f"TTS canceled: {result.cancellation_details.error_details}")
+                if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+                    self._status("Done speaking")
+                elif result.reason == speechsdk.ResultReason.Canceled:
+                    self._status(f"TTS canceled: {result.cancellation_details.error_details}")
+            except Exception as e:
+                self._status(f"TTS error: {e}")
 
             if self.on_speaking_end:
                 self.on_speaking_end()

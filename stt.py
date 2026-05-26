@@ -6,8 +6,8 @@ Supports two capture modes:
     — hears VRChat people, game audio, everything playing through speakers
   - "microphone": captures from a specific input device
 
-For loopback mode, VRChat audio playing through your speakers/headphones
-is captured directly — no virtual cables needed.
+For loopback mode on Windows, uses PyAudio with WASAPI host API to
+capture "Stereo Mix" or a WASAPI loopback device.
 """
 
 import os
@@ -15,6 +15,7 @@ import time
 import queue
 import threading
 import numpy as np
+import pyaudio
 
 
 class AzureSTT:
@@ -69,10 +70,41 @@ class AzureSTT:
         if self.on_status:
             self.on_status(msg)
 
+    @staticmethod
+    def list_devices():
+        """List available audio input devices, highlighting loopback/WASAPI devices."""
+        pa = pyaudio.PyAudio()
+        try:
+            # Check for WASAPI host API
+            wasapi_host = None
+            for i in range(pa.get_host_api_count()):
+                info = pa.get_host_api_info_by_index(i)
+                if "WASAPI" in info.get("name", "").upper():
+                    wasapi_host = i
+                    break
+
+            devices = []
+            target_host = wasapi_host if wasapi_host is not None else 0
+
+            host_info = pa.get_host_api_info_by_index(target_host)
+            num_devices = host_info.get("deviceCount")
+            for i in range(num_devices):
+                dev = pa.get_device_info_by_host_api_device_index(target_host, i)
+                if dev.get("maxInputChannels", 0) > 0:
+                    name = dev.get("name", "")
+                    is_loopback = any(k in name.lower() for k in [
+                        "loopback", "stereo mix", "what u hear", "wasapi loopback"
+                    ])
+                    marker = " [LOOPBACK]" if is_loopback else ""
+                    devices.append((dev["index"], name + marker))
+
+            return devices
+        finally:
+            pa.terminate()
+
     def _capture_loop(self):
         """Loop: capture audio, detect speech, transcribe via Azure."""
         import azure.cognitiveservices.speech as speechsdk
-        import sounddevice as sd
 
         speech_config = speechsdk.SpeechConfig(
             subscription=self.subscription_key, region=self.region
@@ -85,47 +117,38 @@ class AzureSTT:
         FRAME_SIZE = 1024  # ~64ms at 16kHz
         silence_frames_to_cut = int(self.silence_cutoff_sec * SAMPLE_RATE / FRAME_SIZE)
 
+        pa = pyaudio.PyAudio()
+        stream = None
+
         try:
             if self.capture_mode == "loopback":
-                # WASAPI loopback — captures desktop audio output (VRChat voices, etc.)
-                # Only works on Windows. Falls back to default input on other OS.
-                import platform
-                if platform.system() == "Windows":
-                    # Find WASAPI loopback device
-                    devices = sd.query_devices()
-                    loopback_dev = None
-                    for i, dev in enumerate(devices):
-                        name = dev.get("name", "").lower()
-                        if ("loopback" in name or "stereo mix" in name or
-                            "what u hear" in name) and dev.get("max_input_channels", 0) > 0:
-                            loopback_dev = i
-                            self._status(f"Using loopback device [{i}]: {dev['name']}")
-                            break
-
-                    if loopback_dev is None:
-                        # Try to use sounddevice with wasapi loopback via extra_api
-                        self._status("No loopback device found. Using default input.")
-                        self._status("Tip: Enable 'Stereo Mix' in Windows Sound settings.")
-                        dev_index = self.device_index if self.device_index else sd.default.device[0]
+                # Find WASAPI loopback device
+                dev_index = self._find_loopback_device(pa)
+                if dev_index is None:
+                    # Fallback: try default input
+                    default = pa.get_default_input_device_info()
+                    dev_index = default["index"]
+                    self._status("No loopback device found. Using default input.")
+                    self._status("Tip: Enable 'Stereo Mix' in Windows Sound settings → Recording tab.")
                 else:
-                    self._status("Loopback only on Windows. Using default input.")
-                    dev_index = self.device_index if self.device_index else sd.default.device[0]
+                    self._status(f"Using loopback device [{dev_index}]: {pa.get_device_info_by_index(dev_index)['name']}")
             else:
                 dev_index = self.device_index
                 if dev_index is None:
-                    dev_index = sd.default.device[0]
-                self._status(f"Using mic device [{dev_index}]: {sd.query_devices(dev_index)['name']}")
+                    dev_index = pa.get_default_input_device_info()["index"]
+                self._status(f"Using mic device [{dev_index}]: {pa.get_device_info_by_index(dev_index)['name']}")
 
-            stream = sd.InputStream(
-                device=dev_index if self.device_index else None,
+            stream = pa.open(
+                format=pyaudio.paInt16,
                 channels=CHANNELS,
-                samplerate=SAMPLE_RATE,
-                dtype="int16",
-                blocksize=FRAME_SIZE,
+                rate=SAMPLE_RATE,
+                input=True,
+                input_device_index=dev_index,
+                frames_per_buffer=FRAME_SIZE,
             )
-            stream.start()
         except Exception as e:
             self._status(f"Audio init failed: {e}")
+            pa.terminate()
             return
 
         audio_buffer = bytearray()
@@ -135,12 +158,12 @@ class AzureSTT:
 
         while self._running:
             try:
-                data, overflowed = stream.read(FRAME_SIZE)
-                audio_data = data.flatten()
+                data = stream.read(FRAME_SIZE, exception_on_overflow=False)
+                audio_data = np.frombuffer(data, dtype=np.int16)
                 amplitude = np.abs(audio_data).mean()
 
                 if amplitude > self.silence_threshold:
-                    audio_buffer.extend(data.tobytes())
+                    audio_buffer.extend(data)
                     silence_count = 0
                     if not in_speech:
                         in_speech = True
@@ -149,7 +172,7 @@ class AzureSTT:
                     if in_speech:
                         silence_count += 1
                         if silence_count >= silence_frames_to_cut:
-                            if len(audio_buffer) > 16000:
+                            if len(audio_buffer) > 16000:  # at least ~1s of audio
                                 self._status("Transcribing...")
                                 text = self._transcribe(speech_config, bytes(audio_buffer))
                                 if text:
@@ -161,12 +184,52 @@ class AzureSTT:
                             in_speech = False
                             self._status("Listening...")
 
+            except OSError:
+                # Stream overflow — skip frame
+                continue
             except Exception as e:
                 self._status(f"Capture error: {e}")
                 time.sleep(0.5)
 
-        stream.stop()
-        stream.close()
+        if stream:
+            stream.stop_stream()
+            stream.close()
+        pa.terminate()
+
+    def _find_loopback_device(self, pa):
+        """Find a WASAPI loopback / Stereo Mix device."""
+        import platform
+
+        if platform.system() != "Windows":
+            return None
+
+        # Try WASAPI host API first
+        wasapi_host = None
+        for i in range(pa.get_host_api_count()):
+            info = pa.get_host_api_info_by_index(i)
+            if "WASAPI" in info.get("name", "").upper():
+                wasapi_host = i
+                break
+
+        if wasapi_host is not None:
+            host_info = pa.get_host_api_info_by_index(wasapi_host)
+            for i in range(host_info.get("deviceCount")):
+                dev = pa.get_device_info_by_host_api_device_index(wasapi_host, i)
+                if dev.get("maxInputChannels", 0) > 0:
+                    name = dev.get("name", "").lower()
+                    if any(k in name for k in ["loopback", "stereo mix", "what u hear"]):
+                        return dev["index"]
+
+        # Fallback: search all devices
+        info = pa.get_host_api_info_by_index(0)
+        for i in range(info.get("deviceCount")):
+            dev = pa.get_device_info_by_host_api_device_index(0, i)
+            if dev.get("maxInputChannels", 0) > 0:
+                name = dev.get("name", "").lower()
+                if any(k in name for k in ["loopback", "stereo mix", "what u hear"]):
+                    return dev["index"]
+
+        return None
 
     def _transcribe(self, speech_config, audio_bytes: bytes) -> str:
         """Send audio bytes to Azure and return recognized text."""
@@ -202,7 +265,7 @@ class AzureSTT:
         recognizer.start_continuous_recognition()
         done.wait(0.1)  # brief sync
 
-        # Push audio data
+        # Push audio data in chunks
         chunk_size = 3200
         for i in range(0, len(audio_bytes), chunk_size):
             push_stream.write(audio_bytes[i : i + chunk_size])

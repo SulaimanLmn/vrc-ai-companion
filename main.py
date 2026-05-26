@@ -249,16 +249,11 @@ def main():
 
     if args.list_devices:
         from stt import AzureSTT
-        # Just list devices via pyaudio
-        import pyaudio
-        p = pyaudio.PyAudio()
-        info = p.get_host_api_info_by_index(0)
+        devices = AzureSTT.list_devices()
         print("Available audio input devices:")
-        for i in range(info.get("deviceCount")):
-            dev = p.get_device_info_by_host_api_device_index(0, i)
-            if dev.get("maxInputChannels") > 0:
-                print(f"  [{i}] {dev['name']}")
-        p.terminate()
+        for idx, name in devices:
+            print(f"  [{idx}] {name}")
+        print("\nSet AUDIO_DEVICE_INDEX in .env to pick a specific device.")
         return
 
     # Check config
