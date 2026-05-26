@@ -252,6 +252,7 @@
       <button class="primary" id="btnToggle" onclick="toggleEnabled()">⚡ Enable</button>
       <button class="ptt" id="btnPTT" onclick="togglePTT()" disabled>🎤 PTT</button>
       <button class="danger" id="btnReset" onclick="resetChat()">🗑️ Reset</button>
+      <button id="btnTestLLM" onclick="testLLM()">🔗 Test LLM</button>
     </div>
 
     <div class="chat-section">
@@ -374,6 +375,31 @@
         chatLog.innerHTML = '';
         entryCount.textContent = '0 entries';
       });
+    }
+
+    function testLLM() {
+      const btn = document.getElementById('btnTestLLM');
+      btn.textContent = '⏳ Testing...';
+      btn.disabled = true;
+      fetch('/api/test_llm', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          btn.textContent = '🔗 Test LLM';
+          btn.disabled = false;
+          if (data.success) {
+            btn.style.borderColor = 'var(--green)';
+            btn.style.color = 'var(--green)';
+            alert('LLM works! Response: ' + data.reply);
+          } else {
+            btn.style.borderColor = 'var(--red)';
+            btn.style.color = 'var(--red)';
+            alert('LLM error: ' + data.error);
+          }
+          setTimeout(() => {
+            btn.style.borderColor = '';
+            btn.style.color = '';
+          }, 3000);
+        });
     }
 
     // Keyboard shortcuts

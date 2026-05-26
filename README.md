@@ -92,10 +92,20 @@ Open `http://localhost:5000` in your browser.
 
 ## Tips
 
-- **Lower latency**: Use a voice with fast Azure synthesis (e.g., `en-US-JennyNeural`)
-- **Better voice**: Try the approach from the Reddit post — Azure Neural voices with SSML for prosody
-- **Audio device**: Run `python main.py --list-devices` to find your loopback capture device index
+- **Lower latency**: Use a fast Azure voice (e.g., `en-US-JennyNeural`)
+- **Better voice**: Try Azure Neural voices with SSML for prosody
+- **Audio device**: Run `python main.py --list-devices` to find your device index
 - **System prompt**: Customize `SYSTEM_PROMPT` in `.env` for different personalities
+- **Silence detection**: Adjust `STT_SILENCE_THRESHOLD` — lower = more sensitive, higher = less
+- **Test LLM**: Click "Test LLM" in the web UI to verify your LLM connection works
+
+## Troubleshooting
+
+- **LLM not responding**: Click "Test LLM" button. Check `OPENCODE_GO_BASE_URL` points to your running instance
+- **STT not picking up speech**: Lower `STT_SILENCE_THRESHOLD` (try 200-300 for quiet rooms)
+- **STT too trigger-happy**: Raise `STT_SILENCE_THRESHOLD` (try 800-1000 for noisy rooms)
+- **TTS not heard in VRChat**: Make sure Windows default playback device is set to VB-CABLE Input
+- **ChatBox not showing**: Verify OSC is enabled in VRChat Settings and port matches
 
 ## License
 

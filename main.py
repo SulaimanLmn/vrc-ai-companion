@@ -26,6 +26,8 @@ from config import (
     SYSTEM_PROMPT,
     WEB_HOST,
     WEB_PORT,
+    STT_SILENCE_THRESHOLD,
+    STT_SILENCE_CUTOFF_SEC,
 )
 from stt import AzureSTT
 from llm_client import LLMClient
@@ -48,6 +50,8 @@ class NeuroClone:
             subscription_key=AZURE_SPEECH_KEY,
             region=AZURE_SPEECH_REGION,
             device_index=AUDIO_DEVICE_INDEX,
+            silence_threshold=STT_SILENCE_THRESHOLD,
+            silence_cutoff_sec=STT_SILENCE_CUTOFF_SEC,
         )
         self.stt.on_status = self._on_stt_status
 
@@ -119,6 +123,17 @@ class NeuroClone:
             return
         self._process_input(text)
 
+    def test_llm(self) -> dict:
+        """Test LLM connection and return result."""
+        try:
+            reply = self.llm.chat("Say 'connection test OK' in 3 words", max_tokens=15)
+            if reply:
+                return {"success": True, "reply": reply}
+            else:
+                return {"success": False, "error": "Empty response from LLM"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     # -- Core pipeline --
 
     def _on_text_received(self, text: str):
@@ -161,6 +176,8 @@ class NeuroClone:
 
             # TTS
             self.tts.enqueue(reply)
+        else:
+            self._log("system", "No LLM response received")
 
         self._broadcast_status()
 

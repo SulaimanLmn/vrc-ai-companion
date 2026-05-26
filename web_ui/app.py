@@ -50,4 +50,9 @@ def create_app(neuro):
         neuro.reset_conversation()
         return jsonify({"ok": True})
 
+    @app.route("/api/test_llm", methods=["POST"])
+    def api_test_llm():
+        result = neuro.test_llm()
+        return jsonify(result)
+
     return app

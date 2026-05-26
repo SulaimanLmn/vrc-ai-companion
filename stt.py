@@ -19,11 +19,14 @@ class AzureSTT:
     """
 
     def __init__(self, subscription_key: str, region: str, device_index: int = -1,
-                 locale: str = "en-US"):
+                 locale: str = "en-US", silence_threshold: int = 500,
+                 silence_cutoff_sec: float = 2.0):
         self.subscription_key = subscription_key
         self.region = region
         self.device_index = device_index if device_index >= 0 else None
         self.locale = locale
+        self.silence_threshold = silence_threshold
+        self.silence_cutoff_sec = silence_cutoff_sec
         self._running = False
         self._thread = None
         self.on_text = None      # callback(text: str)
@@ -67,8 +70,7 @@ class AzureSTT:
         CHANNELS = 1
         BITS_PER_SAMPLE = 16
         FRAME_SIZE = 1024  # ~64ms per frame at 16kHz
-        SILENCE_THRESHOLD = 500  # adjust per environment
-        SILENCE_FRAMES_TO_CUT = 30  # ~2 seconds of silence to end segment
+        silence_frames_to_cut = int(self.silence_cutoff_sec * SAMPLE_RATE / FRAME_SIZE)
 
         try:
             import pyaudio
@@ -107,7 +109,7 @@ class AzureSTT:
                 audio_data = np.frombuffer(data, dtype=np.int16)
                 amplitude = np.abs(audio_data).mean()
 
-                if amplitude > SILENCE_THRESHOLD:
+                if amplitude > self.silence_threshold:
                     # Speech detected
                     audio_buffer.extend(data)
                     silence_count = 0
@@ -118,7 +120,7 @@ class AzureSTT:
                     if in_speech:
                         silence_count += 1
                         audio_buffer.extend(data)  # keep trailing silence briefly
-                        if silence_count >= SILENCE_FRAMES_TO_CUT:
+                        if silence_count >= silence_frames_to_cut:
                             # End of utterance — transcribe
                             if len(audio_buffer) > 16000:  # at least ~1 second
                                 self._status("Transcribing...")

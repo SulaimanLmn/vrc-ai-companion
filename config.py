@@ -32,3 +32,10 @@ SYSTEM_PROMPT = os.getenv(
 # Web UI
 WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
 WEB_PORT = int(os.getenv("WEB_PORT", "5000"))
+
+# STT tuning
+STT_SILENCE_THRESHOLD = int(os.getenv("STT_SILENCE_THRESHOLD", "500"))
+STT_SILENCE_CUTOFF_SEC = float(os.getenv("STT_SILENCE_CUTOFF_SEC", "2.0"))
+
+# TTS output device (empty = default speaker, or specify device name/ID)
+TTS_OUTPUT_DEVICE = os.getenv("TTS_OUTPUT_DEVICE", "")
