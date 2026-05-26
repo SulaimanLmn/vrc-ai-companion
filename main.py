@@ -192,9 +192,24 @@ class NeuroClone:
 
     def test_tts(self) -> dict:
         """Test TTS by speaking a short phrase."""
+        import time as time_module
+        
+        if not self.tts:
+            return {"success": False, "error": "TTS not initialized"}
+        
         try:
-            self.tts.enqueue("Text to speech test")
-            return {"success": True, "message": "TTS queued successfully"}
+            # Ensure TTS is running (start if not already)
+            if not getattr(self.tts, '_running', False):
+                self.tts.start()
+                time_module.sleep(0.5)
+            
+            test_phrase = "Text to speech test. Can you hear this?"
+            self.tts.enqueue(test_phrase)
+            
+            # Wait a bit for TTS to process
+            time_module.sleep(0.2)
+            
+            return {"success": True, "message": "TTS queued - if no audio, check: default speakers, Azure key, or VB-CABLE"}
         except Exception as e:
             return {"success": False, "error": str(e)}
 

@@ -102,9 +102,12 @@ class AzureTTS:
                 if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
                     self._status("Done speaking")
                 elif result.reason == speechsdk.ResultReason.Canceled:
-                    self._status(f"TTS canceled: {result.cancellation_details.error_details}")
+                    error_details = result.cancellation_details.error_details or "Unknown error"
+                    self._status(f"TTS canceled: {error_details}")
+                    print(f"TTS ERROR: {error_details}")
             except Exception as e:
                 self._status(f"TTS error: {e}")
+                print(f"TTS EXCEPTION: {e}")
 
             if self.on_speaking_end:
                 self.on_speaking_end()
