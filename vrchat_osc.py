@@ -8,8 +8,8 @@ import queue
 import threading
 import time
 import math
-from python_osc import udp_client
-from python_osc import osc_message_builder
+from pythonosc import udp_client
+from pythonosc import osc_message_builder
 
 
 class ChatBox:
