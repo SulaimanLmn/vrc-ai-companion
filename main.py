@@ -22,6 +22,8 @@ from config import (
     OPENCODE_GO_API_KEY,
     OPENCODE_GO_BASE_URL,
     OPENCODE_GO_MODEL,
+    LLM_MAX_TOKENS,
+    LLM_MAX_HISTORY,
     VRC_CHATBOX_IP,
     VRC_CHATBOX_PORT,
     AUDIO_DEVICE_INDEX,
@@ -67,6 +69,8 @@ class NeuroClone:
             base_url=OPENCODE_GO_BASE_URL,
             model=OPENCODE_GO_MODEL,
             system_prompt=SYSTEM_PROMPT,
+            max_tokens=LLM_MAX_TOKENS,
+            max_history=LLM_MAX_HISTORY,
         )
         self.llm.on_status = self._on_llm_status
 

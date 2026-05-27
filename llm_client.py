@@ -13,10 +13,14 @@ class LLMClient:
         base_url: str = "https://opencode.ai/zen/go/v1",
         model: str = "mimo-v2.5-pro",
         system_prompt: str = "",
+        max_tokens: int = 150,
+        max_history: int = 5,
     ):
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0)
         self.model = model
         self.system_prompt = system_prompt
+        self.max_tokens = max_tokens
+        self.max_history = max_history
         self.history = []  # list of {role, content}
         self.on_status = None
 
@@ -28,12 +32,17 @@ class LLMClient:
         """Clear conversation history."""
         self.history = []
 
-    def chat(self, user_message: str, max_tokens: int = 300, temperature: float = 0.8) -> str:
+    def chat(self, user_message: str, max_tokens: int = None, temperature: float = 0.8) -> str:
         """Send a message and get a response. Blocks until complete."""
+        if max_tokens is None:
+            max_tokens = self.max_tokens
         messages = []
         if self.system_prompt:
             messages.append({"role": "system", "content": self.system_prompt})
-        messages.extend(self.history[-20:])  # keep last 20 messages for context
+        if self.max_history > 0:
+            messages.extend(self.history[-self.max_history:])
+        else:
+            messages.extend(self.history)  # 0 = unlimited
         messages.append({"role": "user", "content": user_message})
 
         self._status("Thinking...")
@@ -61,7 +70,10 @@ class LLMClient:
         messages = []
         if self.system_prompt:
             messages.append({"role": "system", "content": self.system_prompt})
-        messages.extend(self.history[-20:])
+        if self.max_history > 0:
+            messages.extend(self.history[-self.max_history:])
+        else:
+            messages.extend(self.history)  # 0 = unlimited
         messages.append({"role": "user", "content": user_message})
 
         self._status("Thinking...")
