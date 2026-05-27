@@ -24,14 +24,14 @@ class AzureTTS:
         subscription_key: str,
         region: str,
         voice: str = "en-US-AshleyNeural",
-        output_device: str = "",
+        output_device_uuid: str = "",
         pitch: int = 0,
     ):
         self.subscription_key = subscription_key
         self.region = region
         self.voice = voice
         self.pitch = pitch  # pitch adjustment in percent (e.g., 35 = +35%)
-        self.output_device = output_device  # device name string, e.g. "CABLE Input (VB-Audio Virtual Cable)"
+        self.output_device_uuid = output_device_uuid  # WASAPI UUID for custom output device
         self._queue = queue.Queue()
         self._running = False
         self._paused = False
@@ -153,11 +153,11 @@ class AzureTTS:
             )
             speech_config.speech_synthesis_voice_name = self.voice
 
-            if self.output_device and self.output_device.strip():
-                # Route TTS to a specific output device (e.g. "CABLE Input")
-                print(f"[TTS] Using output device: {self.output_device}")
+            if self.output_device_uuid and self.output_device_uuid.strip():
+                # Route TTS to a specific output device by WASAPI UUID
+                print(f"[TTS] Using output device UUID: {self.output_device_uuid[:50]}...")
                 audio_config = speechsdk.audio.AudioOutputConfig(
-                    device_name=self.output_device
+                    device_name=self.output_device_uuid
                 )
             else:
                 audio_config = speechsdk.audio.AudioOutputConfig(

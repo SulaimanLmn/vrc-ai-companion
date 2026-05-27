@@ -43,3 +43,7 @@ TTS_OUTPUT_DEVICE = os.getenv("TTS_OUTPUT_DEVICE", "")
 
 # TTS pitch adjustment in percent (e.g. 35 = +35%, -10 = -10%)
 TTS_PITCH = int(os.getenv("TTS_PITCH", "0"))
+
+# Device UUID for TTS output (empty = default speaker)
+# Obtain via: python resolve_devices.py <pyaudio_index>
+TTS_OUTPUT_DEVICE_UUID = os.getenv("TTS_OUTPUT_DEVICE_UUID", "")

@@ -31,7 +31,7 @@ from config import (
     STT_SILENCE_THRESHOLD,
     STT_SILENCE_CUTOFF_SEC,
     STT_CAPTURE_MODE,
-    TTS_OUTPUT_DEVICE,
+    TTS_OUTPUT_DEVICE_UUID,
     TTS_PITCH,
 )
 from stt import AzureSTT
@@ -49,6 +49,7 @@ class NeuroClone:
         self.ptt_active = False     # Push-to-talk active
         self.is_processing = False  # LLM thinking
         self.is_speaking = False    # TTS playing
+        self.is_streaming = False   # VRChat chatbox streaming active
 
         # Components
         self.stt = AzureSTT(
@@ -72,7 +73,7 @@ class NeuroClone:
         self.tts = AzureTTS(
             subscription_key=AZURE_SPEECH_KEY,
             region=AZURE_SPEECH_REGION,
-            output_device=TTS_OUTPUT_DEVICE,
+            output_device_uuid=TTS_OUTPUT_DEVICE_UUID,
             pitch=TTS_PITCH,
         )
         self.tts.on_status = self._on_tts_status
@@ -242,15 +243,12 @@ class NeuroClone:
 
     def _process_input(self, text: str):
         """Full pipeline: input -> LLM -> TTS -> VRChat."""
-        if self.is_processing or self.is_speaking:
+        if self.is_processing or self.is_speaking or self.is_streaming:
             return  # debounce
 
         self.is_processing = True
         self._log("user", text)
         self._broadcast_status()
-
-        # Send to VRChat chatbox what was heard
-        self.chatbox.send_message(f"[heard] {text}", visible=True)
 
         # LLM response
         try:
@@ -265,16 +263,20 @@ class NeuroClone:
         if reply:
             self._log("assistant", reply)
 
-            # Pause STT before TTS plays — prevents capturing
-            # speech during our own reply (saves Azure credits)
+            # Pause STT before TTS plays (saves Azure credits)
             self.stt.pause()
 
-            # VRChat: stream typing + text
-            self.chatbox.start_typing()
-            time.sleep(0.3)
-            self.chatbox.stream_text(reply, delay=0.03)
+            # Stream text to VRChat chatbox word-by-word (parallel with TTS)
+            self.is_streaming = True
+            def stream():
+                try:
+                    self.chatbox.stream_text(reply)
+                finally:
+                    self.is_streaming = False
+                    self._broadcast_status()
+            threading.Thread(target=stream, daemon=True).start()
 
-            # TTS
+            # TTS plays simultaneously
             self.tts.enqueue(reply)
         else:
             self._log("system", "No LLM response received")
