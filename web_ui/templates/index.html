@@ -4,20 +4,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NeuroClone — VRChat AI</title>
+  <title>NeuroClone</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
   <style>
     :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --muted: #8b949e;
-      --accent: #58a6ff;
-      --green: #3fb950;
-      --red: #f85149;
-      --orange: #d29922;
-      --purple: #bc8cff;
+      --bg: #1e1b2e;
+      --surface: #252236;
+      --surface2: #2d2842;
+      --surface3: #34304d;
+      --border: rgba(255, 255, 255, 0.07);
+      --border2: rgba(255, 255, 255, 0.11);
+      --border3: rgba(255, 255, 255, 0.18);
+      --text: #eeeaf8;
+      --text2: #a89ec4;
+      --text3: #5e5878;
+      --purple: #a78bfa;
+      --purple-dim: rgba(167, 139, 250, 0.12);
+      --teal: #2dd4bf;
+      --teal-dim: rgba(45, 212, 191, 0.1);
+      --amber: #fbbf24;
+      --amber-dim: rgba(251, 191, 36, 0.1);
+      --green: #4ade80;
+      --green-dim: rgba(74, 222, 128, 0.1);
+      --red: #f87171;
+      --red-dim: rgba(248, 113, 113, 0.1);
+      --r-md: 9px;
+      --r-lg: 13px;
+      --r-xl: 16px;
     }
 
     * {
@@ -27,377 +43,577 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: 'Geist', -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
     }
 
-    .container {
-      max-width: 800px;
+    .wrap {
+      max-width: 700px;
       margin: 0 auto;
-      padding: 20px;
+      padding: 28px 20px;
     }
 
-    header {
-      text-align: center;
-      padding: 20px 0;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 20px;
-    }
-
-    header h1 {
-      font-size: 1.8em;
-      color: var(--accent);
-    }
-
-    header p {
-      color: var(--muted);
-      margin-top: 4px;
-    }
-
-    /* Status bar */
-    .status-bar {
+    /* Header */
+    .hdr {
       display: flex;
-      justify-content: center;
-      gap: 20px;
       align-items: center;
-      padding: 15px;
-      background: var(--surface);
-      border-radius: 10px;
-      margin-bottom: 20px;
+      justify-content: space-between;
+      margin-bottom: 22px;
     }
 
-    .state-badge {
-      font-size: 1.4em;
-      font-weight: bold;
-      padding: 6px 16px;
-      border-radius: 8px;
-      background: var(--bg);
-      transition: all 0.3s;
-    }
-
-    .state-OFF {
-      color: var(--red);
-      border: 2px solid var(--red);
-    }
-
-    .state-ON {
-      color: var(--green);
-      border: 2px solid var(--green);
-    }
-
-    .state-LISTENING\ \(PTT\) {
-      color: var(--orange);
-      border: 2px solid var(--orange);
-    }
-
-    .state-THINKING {
-      color: var(--purple);
-      border: 2px solid var(--purple);
-    }
-
-    .state-SPEAKING {
-      color: var(--accent);
-      border: 2px solid var(--accent);
-    }
-
-    /* Controls */
-    .controls {
+    .hdr-left {
       display: flex;
-      justify-content: center;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 20px;
+      align-items: center;
+      gap: 10px;
     }
 
-    button {
-      padding: 10px 24px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--surface);
+    .hdr-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: var(--purple-dim);
+      border: 1px solid rgba(167, 139, 250, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .hdr-name {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
       color: var(--text);
-      font-size: 1em;
-      cursor: pointer;
+    }
+
+    .hdr-desc {
+      font-size: 12px;
+      color: var(--text3);
+      margin-top: 2px;
+    }
+
+    .hdr-badge {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      color: var(--teal);
+      background: var(--teal-dim);
+      border: 1px solid rgba(45, 212, 191, 0.2);
+      border-radius: 99px;
+      padding: 4px 10px;
+    }
+
+    /* State bar */
+    .state-bar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: var(--r-xl);
+      padding: 14px 18px;
+      margin-bottom: 12px;
+    }
+
+    .sdot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--text3);
+      transition: background 0.25s, box-shadow 0.25s;
+    }
+
+    .sdot.off {
+      background: var(--red);
+    }
+
+    .sdot.on {
+      background: var(--green);
+      box-shadow: 0 0 7px rgba(74, 222, 128, 0.5);
+    }
+
+    .sdot.listen {
+      background: var(--amber);
+      box-shadow: 0 0 7px rgba(251, 191, 36, 0.5);
+    }
+
+    .sdot.think {
+      background: var(--purple);
+      box-shadow: 0 0 7px rgba(167, 139, 250, 0.5);
+    }
+
+    .sdot.speak {
+      background: var(--teal);
+      box-shadow: 0 0 7px rgba(45, 212, 191, 0.5);
+    }
+
+    .sinfo {
+      flex: 1;
+    }
+
+    .slabel {
+      font-size: 11px;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .svalue {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text);
+      margin-top: 2px;
+    }
+
+    .stag {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 99px;
+      border: 1px solid;
       transition: all 0.2s;
     }
 
-    button:hover {
-      background: var(--border);
-    }
-
-    button.primary {
-      background: var(--accent);
-      color: var(--bg);
-      border-color: var(--accent);
-    }
-
-    button.primary:hover {
-      background: #79b8ff;
-    }
-
-    button.ptt {
-      min-width: 160px;
-      font-weight: bold;
-    }
-
-    button.ptt.active {
-      background: var(--orange);
-      color: var(--bg);
-      border-color: var(--orange);
-      animation: pulse 1.5s infinite;
-    }
-
-    button.danger {
-      border-color: var(--red);
+    .stag.off {
       color: var(--red);
+      border-color: rgba(248, 113, 113, 0.3);
+      background: var(--red-dim);
     }
 
-    button.danger:hover {
-      background: var(--red);
-      color: var(--bg);
+    .stag.on {
+      color: var(--green);
+      border-color: rgba(74, 222, 128, 0.3);
+      background: var(--green-dim);
     }
 
-    @keyframes pulse {
-
-      0%,
-      100% {
-        box-shadow: 0 0 0 0 rgba(210, 153, 34, 0.4);
-      }
-
-      50% {
-        box-shadow: 0 0 0 10px rgba(210, 153, 34, 0);
-      }
+    .stag.listen {
+      color: var(--amber);
+      border-color: rgba(251, 191, 36, 0.3);
+      background: var(--amber-dim);
     }
 
-    /* Chat log */
-    .chat-section {
-      background: var(--surface);
-      border-radius: 10px;
-      border: 1px solid var(--border);
+    .stag.think {
+      color: var(--purple);
+      border-color: rgba(167, 139, 250, 0.3);
+      background: var(--purple-dim);
     }
 
-    .chat-header {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
+    .stag.speak {
+      color: var(--teal);
+      border-color: rgba(45, 212, 191, 0.3);
+      background: var(--teal-dim);
+    }
+
+    /* Buttons */
+    .btn-row {
       display: flex;
-      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
       align-items: center;
     }
 
-    .chat-header h3 {
-      color: var(--muted);
-      font-size: 0.9em;
-      text-transform: uppercase;
+    button {
+      font-family: 'Geist', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 9px 16px;
+      border-radius: var(--r-md);
+      border: 1px solid var(--border2);
+      background: var(--surface);
+      color: var(--text2);
+      cursor: pointer;
+      transition: all 0.15s;
+      outline: none;
     }
 
-    .chat-log {
-      height: 400px;
+    button:hover {
+      background: var(--surface2);
+      border-color: var(--border3);
+      color: var(--text);
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    button:disabled {
+      opacity: 0.3;
+      cursor: default;
+      transform: none;
+    }
+
+    button.primary {
+      background: var(--purple-dim);
+      border-color: rgba(167, 139, 250, 0.35);
+      color: var(--purple);
+      font-weight: 600;
+    }
+
+    button.primary:hover {
+      background: rgba(167, 139, 250, 0.2);
+      border-color: rgba(167, 139, 250, 0.5);
+    }
+
+    button.ptt.active {
+      background: var(--amber-dim);
+      border-color: rgba(251, 191, 36, 0.35);
+      color: var(--amber);
+    }
+
+    button.ghost {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--text3);
+      font-size: 12px;
+    }
+
+    button.ghost:hover {
+      background: var(--surface);
+      border-color: var(--border2);
+      color: var(--text2);
+    }
+
+    button.danger {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--text3);
+      font-size: 12px;
+      margin-left: auto;
+    }
+
+    button.danger:hover {
+      background: var(--red-dim);
+      border-color: rgba(248, 113, 113, 0.3);
+      color: var(--red);
+    }
+
+    /* Log card */
+    .log-card {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: var(--r-xl);
+      overflow: hidden;
+    }
+
+    .log-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .log-top-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text2);
+    }
+
+    .log-count {
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+      color: var(--text3);
+      background: var(--surface3);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 2px 9px;
+    }
+
+    .log-body {
+      height: 360px;
       overflow-y: auto;
-      padding: 12px;
+      padding: 10px 10px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
 
-    .chat-entry {
-      margin-bottom: 8px;
-      padding: 8px 12px;
-      border-radius: 8px;
-      line-height: 1.4;
+    .log-body::-webkit-scrollbar {
+      width: 3px;
     }
 
-    .entry-user {
-      background: rgba(88, 166, 255, 0.1);
-      border-left: 3px solid var(--accent);
+    .log-body::-webkit-scrollbar-thumb {
+      background: var(--border2);
+      border-radius: 4px;
     }
 
-    .entry-assistant {
-      background: rgba(188, 140, 255, 0.1);
-      border-left: 3px solid var(--purple);
+    .log-empty {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text3);
+      font-size: 13px;
+      padding: 40px 0;
     }
 
-    .entry-system {
-      background: rgba(139, 148, 158, 0.1);
-      border-left: 3px solid var(--muted);
-      color: var(--muted);
-      font-style: italic;
-      font-size: 0.9em;
+    .msg {
+      display: flex;
+      gap: 10px;
+      padding: 8px;
+      border-radius: var(--r-md);
+      transition: background 0.1s;
     }
 
-    .entry-label {
-      font-weight: bold;
-      font-size: 0.8em;
-      margin-bottom: 2px;
+    .msg:hover {
+      background: var(--surface2);
     }
 
-    .entry-user .entry-label {
-      color: var(--accent);
+    .msg-ava {
+      width: 27px;
+      height: 27px;
+      border-radius: 7px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px;
+      font-weight: 500;
+      margin-top: 1px;
     }
 
-    .entry-assistant .entry-label {
+    .msg.user .msg-ava {
+      background: var(--teal-dim);
+      color: var(--teal);
+      border: 1px solid rgba(45, 212, 191, 0.2);
+    }
+
+    .msg.ai .msg-ava {
+      background: var(--purple-dim);
+      color: var(--purple);
+      border: 1px solid rgba(167, 139, 250, 0.2);
+    }
+
+    .msg.system .msg-ava {
+      background: var(--surface3);
+      color: var(--text3);
+      border: 1px solid var(--border2);
+    }
+
+    .msg-right {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .msg-name {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin-bottom: 3px;
+    }
+
+    .msg.user .msg-name {
+      color: var(--teal);
+    }
+
+    .msg.ai .msg-name {
       color: var(--purple);
     }
 
-    /* Manual input */
-    .manual-input {
+    .msg.system .msg-name {
+      color: var(--text3);
+    }
+
+    .msg-text {
+      font-size: 13.5px;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .msg.system .msg-text {
+      color: var(--text3);
+      font-size: 12px;
+    }
+
+    /* Input */
+    .input-wrap {
       display: flex;
       gap: 8px;
-      padding: 12px;
+      align-items: center;
+      padding: 10px 12px;
       border-top: 1px solid var(--border);
+      background: var(--surface2);
     }
 
-    .manual-input input {
+    .input-wrap input {
       flex: 1;
-      padding: 10px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--bg);
+      padding: 9px 12px;
+      background: var(--surface3);
+      border: 1px solid var(--border2);
+      border-radius: var(--r-md);
+      font-family: 'Geist', sans-serif;
+      font-size: 13.5px;
       color: var(--text);
-      font-size: 1em;
-    }
-
-    .manual-input input:focus {
       outline: none;
-      border-color: var(--accent);
+      transition: border-color 0.15s;
     }
 
-    /* Shortcuts hint */
-    .shortcuts {
-      text-align: center;
-      margin-top: 16px;
-      color: var(--muted);
-      font-size: 0.85em;
+    .input-wrap input:focus {
+      border-color: rgba(167, 139, 250, 0.4);
+    }
+
+    .input-wrap input::placeholder {
+      color: var(--text3);
+    }
+
+    .send-btn {
+      font-family: 'Geist', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 9px 14px;
+      background: var(--purple-dim);
+      border: 1px solid rgba(167, 139, 250, 0.3);
+      border-radius: var(--r-md);
+      color: var(--purple);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .send-btn:hover {
+      background: rgba(167, 139, 250, 0.2);
+      border-color: rgba(167, 139, 250, 0.45);
+    }
+
+    /* Hints */
+    .hints {
+      display: flex;
+      gap: 16px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+      padding: 0 2px;
+    }
+
+    .hint {
+      font-size: 11.5px;
+      color: var(--text3);
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
 
     kbd {
-      background: var(--surface);
-      border: 1px solid var(--border);
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
       border-radius: 4px;
       padding: 2px 6px;
-      font-size: 0.9em;
+      color: var(--text2);
     }
   </style>
 </head>
 
 <body>
-  <div class="container">
-    <header>
-      <h1>🧠 NeuroClone</h1>
-      <p>AI VTuber for VRChat — Speech → LLM → TTS → OSC</p>
-    </header>
+  <div class="wrap">
 
-    <div class="status-bar">
-      <div>State:</div>
-      <div class="state-badge state-OFF" id="stateBadge">OFF</div>
-    </div>
-
-<div class="controls">
-       <button class="primary" id="btnToggle" onclick="toggleEnabled()">⚡ Enable</button>
-       <button class="ptt" id="btnPTT" onclick="togglePTT()" disabled>🎤 PTT</button>
-       <button class="danger" id="btnReset" onclick="resetChat()">🗑️ Reset</button>
-       <button id="btnTestLLM" onclick="testLLM()">🔗 Test LLM</button>
-       <button id="btnTestSTT" onclick="testSTT()">🎤 Test STT</button>
-       <button id="btnTestTTS" onclick="testTTS()">🔊 Test TTS</button>
-     </div>
-
-    <div class="chat-section">
-      <div class="chat-header">
-        <h3>💬 Conversation Log</h3>
-        <span id="entryCount" style="color: var(--muted); font-size: 0.85em;">0 entries</span>
+    <div class="hdr">
+      <div class="hdr-left">
+        <div class="hdr-icon">🧠</div>
+        <div>
+          <div class="hdr-name">NeuroClone</div>
+          <div class="hdr-desc">Speech · LLM · TTS · OSC</div>
+        </div>
       </div>
-      <div class="chat-log" id="chatLog"></div>
-      <div class="manual-input">
-        <input type="text" id="manualInput" placeholder="Type message manually (or use STT)..."
-          onkeydown="if(event.key==='Enter')sendManual()">
-        <button onclick="sendManual()">Send</button>
+      <div class="hdr-badge">v1.0.0</div>
+    </div>
+
+    <div class="state-bar">
+      <div class="sdot off" id="sDot"></div>
+      <div class="sinfo">
+        <div class="slabel">Current state</div>
+        <div class="svalue" id="sVal">Off</div>
+      </div>
+      <div class="stag off" id="sTag">OFF</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="primary" id="btnToggle" onclick="toggleEnabled()">Enable</button>
+      <button class="ptt" id="btnPTT" onclick="togglePTT()" disabled>Push to talk</button>
+      <button class="ghost" id="btnTestLLM" onclick="runTest('btnTestLLM','Test LLM','/api/test_llm')">Test LLM</button>
+      <button class="ghost" id="btnTestSTT" onclick="runTest('btnTestSTT','Test STT','/api/test_stt')">Test STT</button>
+      <button class="ghost" id="btnTestTTS" onclick="runTest('btnTestTTS','Test TTS','/api/test_tts')">Test TTS</button>
+      <button class="danger" onclick="resetChat()">Clear</button>
+    </div>
+
+    <div class="log-card">
+      <div class="log-top">
+        <span class="log-top-title">Conversation</span>
+        <span class="log-count" id="logCount">0 messages</span>
+      </div>
+      <div class="log-body" id="logBody">
+        <div class="log-empty" id="logEmpty">No messages yet</div>
+      </div>
+      <div class="input-wrap">
+        <input type="text" id="manualInput" placeholder="Type a message..."
+          onkeydown="if(event.key==='Enter') sendManual()">
+        <button class="send-btn" onclick="sendManual()">Send</button>
       </div>
     </div>
 
-    <div class="shortcuts">
-      <kbd>Space</kbd> (hold) — Push-to-Talk &nbsp;|&nbsp;
-      <kbd>Enter</kbd> — Send text &nbsp;|&nbsp;
-      <kbd>E</kbd> — Toggle enable
+    <div class="hints">
+      <span class="hint"><kbd>Space</kbd> push to talk</span>
+      <span class="hint"><kbd>E</kbd> toggle on/off</span>
+      <span class="hint"><kbd>Enter</kbd> send</span>
     </div>
+
   </div>
 
   <script>
     const socket = io();
-    const chatLog = document.getElementById('chatLog');
-    const stateBadge = document.getElementById('stateBadge');
+
+    let entries = [], enabled = false, pttActive = false;
+    const sDot = document.getElementById('sDot');
+    const sVal = document.getElementById('sVal');
+    const sTag = document.getElementById('sTag');
     const btnToggle = document.getElementById('btnToggle');
     const btnPTT = document.getElementById('btnPTT');
-    const entryCount = document.getElementById('entryCount');
+    const logBody = document.getElementById('logBody');
+    const logEmpty = document.getElementById('logEmpty');
+    const logCount = document.getElementById('logCount');
 
-    let entries = [];
+    const SM = {
+      'OFF': { cls: 'off', label: 'Off', tag: 'OFF' },
+      'ON': { cls: 'on', label: 'Ready', tag: 'ON' },
+      'LISTENING': { cls: 'listen', label: 'Listening...', tag: 'LISTENING' },
+      'THINKING': { cls: 'think', label: 'Thinking...', tag: 'THINKING' },
+      'SPEAKING': { cls: 'speak', label: 'Speaking', tag: 'SPEAKING' },
+    };
 
-    // Load initial state
-    fetch('/api/status').then(r => r.json()).then(updateStatus);
-    fetch('/api/chat_log').then(r => r.json()).then(log => {
-      entries = log;
-      renderLog();
-    });
-
-    // Socket.IO events
-    socket.on('status_update', updateStatus);
-    socket.on('chat_entry', data => {
-      entries.push(data);
-      if (entries.length > 200) entries = entries.slice(-200);
-      appendEntry(data);
-    });
-
-    function updateStatus(status) {
-      stateBadge.textContent = status.state;
-      stateBadge.className = 'state-badge state-' + status.state;
-
-      btnToggle.textContent = status.enabled ? '⏸ Disable' : '⚡ Enable';
-      btnPTT.disabled = !status.enabled;
-
-      if (status.ptt_active) {
+    function updateUI(s) {
+      const m = SM[s.state] || { cls: 'off', label: s.state, tag: s.state };
+      sDot.className = 'sdot ' + m.cls;
+      sVal.textContent = m.label;
+      sTag.className = 'stag ' + m.cls;
+      sTag.textContent = m.tag;
+      btnToggle.textContent = s.enabled ? 'Disable' : 'Enable';
+      btnToggle.classList.toggle('primary', !s.enabled);
+      btnPTT.disabled = !s.enabled;
+      if (s.ptt_active) {
         btnPTT.classList.add('active');
-        btnPTT.textContent = '🎤 LISTENING';
+        btnPTT.textContent = 'Listening...';
       } else {
         btnPTT.classList.remove('active');
-        btnPTT.textContent = '🎤 PTT';
+        btnPTT.textContent = 'Push to talk';
       }
     }
 
-    function renderLog() {
-      chatLog.innerHTML = '';
-      entries.forEach(appendEntry);
-      chatLog.scrollTop = chatLog.scrollHeight;
-      entryCount.textContent = entries.length + ' entries';
-    }
-
-    function appendEntry(data) {
-      const div = document.createElement('div');
-      const roleClass = data.role === 'user' ? 'entry-user'
-        : data.role === 'assistant' ? 'entry-assistant'
-          : 'entry-system';
-      div.className = 'chat-entry ' + roleClass;
-
-      const label = data.role === 'user' ? '👤 Heard'
-        : data.role === 'assistant' ? '🤖 Response'
-          : '⚙️ System';
-
-      div.innerHTML = `<div class="entry-label">${label}</div><div>${escapeHtml(data.text)}</div>`;
-      chatLog.appendChild(div);
-      chatLog.scrollTop = chatLog.scrollHeight;
-      entryCount.textContent = entries.length + ' entries';
-    }
-
-    function escapeHtml(text) {
-      const d = document.createElement('div');
-      d.textContent = text;
-      return d.innerHTML;
-    }
-
-    // API calls
     function toggleEnabled() {
       fetch('/api/toggle_enabled', { method: 'POST' })
-        .then(r => r.json()).then(updateStatus);
+        .then(r => r.json()).then(updateUI)
+        .catch(() => { enabled = !enabled; updateUI({ enabled, ptt_active: pttActive, state: enabled ? 'ON' : 'OFF' }); });
     }
 
     function togglePTT() {
       fetch('/api/toggle_ptt', { method: 'POST' })
-        .then(r => r.json()).then(updateStatus);
+        .then(r => r.json()).then(updateUI)
+        .catch(() => { pttActive = !pttActive; updateUI({ enabled, ptt_active: pttActive, state: pttActive ? 'LISTENING' : 'ON' }); });
     }
 
     function sendManual() {
@@ -408,123 +624,93 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
-      });
+      }).catch(() => appendEntry({ role: 'user', text }));
       input.value = '';
     }
 
     function resetChat() {
-      fetch('/api/reset', { method: 'POST' }).then(() => {
-        entries = [];
-        chatLog.innerHTML = '';
-        entryCount.textContent = '0 entries';
-      });
+      fetch('/api/reset', { method: 'POST' }).catch(() => { });
+      entries = [];
+      logBody.innerHTML = '';
+      logBody.appendChild(logEmpty);
+      logEmpty.style.display = 'flex';
+      logCount.textContent = '0 messages';
     }
 
-function testLLM() {
-       const btn = document.getElementById('btnTestLLM');
-       btn.textContent = '⏳ Testing...';
-       btn.disabled = true;
-       fetch('/api/test_llm', { method: 'POST' })
-         .then(r => r.json())
-         .then(data => {
-           btn.textContent = '🔗 Test LLM';
-           btn.disabled = false;
-           if (data.success) {
-             btn.style.borderColor = 'var(--green)';
-             btn.style.color = 'var(--green)';
-             alert('LLM works! Response: ' + data.reply);
-           } else {
-             btn.style.borderColor = 'var(--red)';
-             btn.style.color = 'var(--red)';
-             alert('LLM error: ' + data.error);
-           }
-           setTimeout(() => {
-             btn.style.borderColor = '';
-             btn.style.color = '';
-           }, 3000);
-         });
-     }
+    function runTest(id, label, endpoint) {
+      const btn = document.getElementById(id);
+      btn.textContent = 'Testing...'; btn.disabled = true;
+      fetch(endpoint, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          btn.textContent = label; btn.disabled = false;
+          btn.style.color = data.success ? 'var(--green)' : 'var(--red)';
+          alert(data.success ? (data.reply || data.message) : data.error);
+          setTimeout(() => { btn.style.color = ''; }, 3000);
+        })
+        .catch(() => { btn.textContent = label; btn.disabled = false; });
+    }
 
-     function testSTT() {
-       const btn = document.getElementById('btnTestSTT');
-       btn.textContent = '⏳ Testing...';
-       btn.disabled = true;
-       fetch('/api/test_stt', { method: 'POST' })
-         .then(r => r.json())
-         .then(data => {
-           btn.textContent = '🎤 Test STT';
-           btn.disabled = false;
-           if (data.success) {
-             btn.style.borderColor = 'var(--green)';
-             btn.style.color = 'var(--green)';
-             alert('STT test: ' + data.message);
-           } else {
-             btn.style.borderColor = 'var(--red)';
-             btn.style.color = 'var(--red)';
-             alert('STT error: ' + data.error);
-           }
-           setTimeout(() => {
-             btn.style.borderColor = '';
-             btn.style.color = '';
-           }, 3000);
-         });
-     }
+    function appendEntry(data) {
+      if (logEmpty.parentNode) logEmpty.remove();
+      entries.push(data);
+      if (entries.length > 200) entries.shift();
 
-     function testTTS() {
-       const btn = document.getElementById('btnTestTTS');
-       btn.textContent = '⏳ Testing...';
-       btn.disabled = true;
-       fetch('/api/test_tts', { method: 'POST' })
-         .then(r => r.json())
-         .then(data => {
-           btn.textContent = '🔊 Test TTS';
-           btn.disabled = false;
-           if (data.success) {
-             btn.style.borderColor = 'var(--green)';
-             btn.style.color = 'var(--green)';
-             alert('TTS test: ' + data.message);
-           } else {
-             btn.style.borderColor = 'var(--red)';
-             btn.style.color = 'var(--red)';
-             alert('TTS error: ' + data.error);
-           }
-           setTimeout(() => {
-             btn.style.borderColor = '';
-             btn.style.color = '';
-           }, 3000);
-         });
-     }
+      const cls = data.role === 'user' ? 'user' : data.role === 'assistant' ? 'ai' : 'system';
+      const name = data.role === 'user' ? 'You' : data.role === 'assistant' ? 'NeuroClone' : 'System';
+      const ava = data.role === 'user' ? 'YOU' : data.role === 'assistant' ? 'NC' : 'SYS';
+
+      const div = document.createElement('div');
+      div.className = 'msg ' + cls;
+      div.innerHTML = `
+      <div class="msg-ava">${ava}</div>
+      <div class="msg-right">
+        <div class="msg-name">${name}</div>
+        <div class="msg-text">${esc(data.text)}</div>
+      </div>`;
+      logBody.appendChild(div);
+      logBody.scrollTop = logBody.scrollHeight;
+
+      const n = entries.length;
+      logCount.textContent = n + ' message' + (n === 1 ? '' : 's');
+    }
+
+    function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    // Socket.IO live updates
+    socket.on('status_update', updateUI);
+    socket.on('chat_entry', data => {
+      entries.push(data);
+      if (entries.length > 200) entries = entries.slice(-200);
+      appendEntry(data);
+    });
+
+    // Load initial state
+    fetch('/api/status').then(r => r.json()).then(updateUI)
+      .catch(() => updateUI({ enabled: false, ptt_active: false, state: 'OFF' }));
+    fetch('/api/chat_log').then(r => r.json()).then(log => {
+      log.forEach(appendEntry);
+      logBody.scrollTop = logBody.scrollHeight;
+    }).catch(() => { });
 
     // Keyboard shortcuts
     let spaceDown = false;
     document.addEventListener('keydown', e => {
       if (e.target.tagName === 'INPUT') return;
       if (e.code === 'Space' && !spaceDown) {
-        e.preventDefault();
-        spaceDown = true;
-        fetch('/api/toggle_ptt', { method: 'POST' })
-          .then(r => r.json()).then(s => {
-            // Force PTT on
-            if (!s.ptt_active) {
-              fetch('/api/toggle_ptt', { method: 'POST' });
-            }
-          });
+        e.preventDefault(); spaceDown = true;
+        fetch('/api/toggle_ptt', { method: 'POST' }).then(r => r.json()).then(s => {
+          if (!s.ptt_active) fetch('/api/toggle_ptt', { method: 'POST' });
+        });
       }
-      if (e.key === 'e' || e.key === 'E') {
-        toggleEnabled();
-      }
+      if (e.key === 'e' || e.key === 'E') toggleEnabled();
     });
-
     document.addEventListener('keyup', e => {
       if (e.code === 'Space' && spaceDown) {
         spaceDown = false;
-        // Turn PTT off on release
-        fetch('/api/toggle_ptt', { method: 'POST' })
-          .then(r => r.json()).then(s => {
-            if (s.ptt_active) {
-              fetch('/api/toggle_ptt', { method: 'POST' });
-            }
-          });
+        fetch('/api/toggle_ptt', { method: 'POST' }).then(r => r.json()).then(s => {
+          if (s.ptt_active) fetch('/api/toggle_ptt', { method: 'POST' });
+        });
       }
     });
   </script>

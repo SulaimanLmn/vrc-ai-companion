@@ -8,3 +8,6 @@ simple-websocket>=1.0.0
 pyaudio>=0.2.14
 numpy>=1.24.0
 SpeechRecognition>=3.11.0
+mss>=9.0.0
+pywin32>=305
+Pillow>=10.0.0

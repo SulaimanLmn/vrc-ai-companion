@@ -17,6 +17,10 @@ OPENCODE_GO_MODEL = os.getenv("OPENCODE_GO_MODEL", "mimo-v2.5-pro")
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "150"))
 LLM_MAX_HISTORY = int(os.getenv("LLM_MAX_HISTORY", "5"))
 
+# Vision / Screen Capture (uses the main LLM model)
+VISION_TRIGGER_PHRASE = os.getenv("VISION_TRIGGER_PHRASE", "look at this").lower()
+VISION_CAPTURE_WINDOW = os.getenv("VISION_CAPTURE_WINDOW", "VRChat")
+
 # VRChat OSC
 VRC_CHATBOX_IP = os.getenv("VRC_CHATBOX_IP", "127.0.0.1")
 VRC_CHATBOX_PORT = int(os.getenv("VRC_CHATBOX_PORT", "9000"))

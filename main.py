@@ -24,6 +24,8 @@ from config import (
     OPENCODE_GO_MODEL,
     LLM_MAX_TOKENS,
     LLM_MAX_HISTORY,
+    VISION_TRIGGER_PHRASE,
+    VISION_CAPTURE_WINDOW,
     VRC_CHATBOX_IP,
     VRC_CHATBOX_PORT,
     AUDIO_DEVICE_INDEX,
@@ -254,12 +256,30 @@ class NeuroClone:
         self._log("user", text)
         self._broadcast_status()
 
-        # LLM response
-        try:
-            reply = self.llm.chat(text)
-        except Exception as e:
-            reply = ""
-            self._log("system", f"LLM error: {e}")
+        # LLM response — or vision if triggered
+        reply = ""
+        is_vision = False
+        if VISION_TRIGGER_PHRASE and VISION_TRIGGER_PHRASE in text.lower():
+            is_vision = True
+            self._log("system", "Capturing screen...")
+            self._broadcast_status()
+            try:
+                from vision import _capture_window
+                img = _capture_window(VISION_CAPTURE_WINDOW)
+                if img:
+                    reply = self.llm.chat_with_image(text, img)
+                else:
+                    reply = "[Could not capture screen]"
+            except Exception as e:
+                self._log("system", f"Vision error: {e}")
+                reply = ""
+
+        if not reply:
+            try:
+                reply = self.llm.chat(text)
+            except Exception as e:
+                reply = ""
+                self._log("system", f"LLM error: {e}")
 
         self.is_processing = False
         self._broadcast_status()
@@ -347,17 +367,50 @@ class NeuroClone:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="NeuroClone — AI VTuber for VRChat")
-    parser.add_argument("--list-devices", action="store_true", help="List audio input devices")
+    parser = argparse.ArgumentParser(description="AI Companion for VRChat")
+    parser.add_argument("--list-devices", action="store_true", help="List audio input and output devices")
+    parser.add_argument("--list-windows", action="store_true", help="List visible window titles (for VISION_CAPTURE_WINDOW)")
     args = parser.parse_args()
 
     if args.list_devices:
-        from stt import AzureSTT
-        devices = AzureSTT.list_devices()
-        print("Available audio input devices:")
-        for idx, name in devices:
-            print(f"  [{idx}] {name}")
-        print("\nSet AUDIO_DEVICE_INDEX in .env to pick a specific device.")
+        import pyaudio
+        pa = pyaudio.PyAudio()
+        print("=== AUDIO OUTPUT DEVICES (for TTS) ===")
+        seen_out = set()
+        for i in range(pa.get_device_count()):
+            info = pa.get_device_info_by_index(i)
+            if info.get("maxOutputChannels", 0) > 0:
+                name = info["name"]
+                if name not in seen_out:
+                    seen_out.add(name)
+                    print(f'  [{i}] {name}')
+        print()
+        print("=== AUDIO INPUT DEVICES (for STT) ===")
+        seen_in = set()
+        for i in range(pa.get_device_count()):
+            info = pa.get_device_info_by_index(i)
+            if info.get("maxInputChannels", 0) > 0:
+                name = info["name"]
+                marker = " [LOOPBACK]" if "loopback" in name.lower() else ""
+                if name not in seen_in:
+                    seen_in.add(name)
+                    print(f'  [{i}] {name}{marker}')
+        pa.terminate()
+        print()
+        print("Set AUDIO_DEVICE_INDEX in .env for STT input.")
+        print("TTS routes via TTS_OUTPUT_DEVICE_UUID (run: python resolve_devices.py <index>)")
+        return
+
+    if args.list_windows:
+        try:
+            from vision import list_window_titles
+            titles = list_window_titles()
+            print("Visible window titles:")
+            for t in titles:
+                print(f"  {t}")
+            print("\nSet VISION_CAPTURE_WINDOW in .env to one of the above.")
+        except Exception as e:
+            print(f"Error listing windows: {e}")
         return
 
     # Check config

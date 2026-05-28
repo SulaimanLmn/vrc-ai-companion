@@ -64,6 +64,53 @@ class LLMClient:
             self._status(f"LLM error: {e}")
             return ""
 
+    def chat_with_image(self, user_message: str, image_bytes: bytes,
+                        temperature: float = 0.8) -> str:
+        """Send text + image to the model (single model, full context)."""
+        import base64
+        b64 = base64.b64encode(image_bytes).decode("utf-8")
+        data_uri = f"data:image/png;base64,{b64}"
+
+        # Prompt: game content only — no UI, no usernames, no HUD
+        text_block = user_message + "\n\nSTRICT RULES FOR THIS IMAGE:\n"
+        text_block += "- Do NOT mention any text, usernames, player names, labels, or on-screen words.\n"
+        "- Do NOT mention FPS counters, icons, buttons, menus, HUD elements, or interface panels.\n"
+        "- Do NOT mention microphone icons, speaker icons, mute/unmute indicators, or settings buttons.\n"
+        "- Describe ONLY the 3D scene, environment, lighting, avatars, and what characters are doing.\n"
+        "- If you see text, ignore it completely. Act like it is not there.\n"
+        "- Treat the image like a photograph of a real place, not a video game screenshot."
+
+        messages = []
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+        if self.max_history > 0:
+            messages.extend(self.history[-self.max_history:])
+        else:
+            messages.extend(self.history)
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": text_block},
+                {"type": "image_url", "image_url": {"url": data_uri}},
+            ]
+        })
+
+        self._status("Looking...")
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=self.max_tokens,
+                temperature=temperature,
+            )
+            reply = response.choices[0].message.content or ""
+            self.history.append({"role": "user", "content": user_message})
+            self.history.append({"role": "assistant", "content": reply})
+            return reply.strip()
+        except Exception as e:
+            self._status(f"Vision error: {e}")
+            return ""
+
     def chat_stream(self, user_message: str, max_tokens: int = 300, temperature: float = 0.8,
                     on_chunk=None):
         """Stream tokens as they arrive. on_chunk(text) called per token."""

@@ -7,4 +7,5 @@ venv/
 dist/
 build/
 .web_cache/
+vision-image/
 
