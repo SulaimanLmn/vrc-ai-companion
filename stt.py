@@ -622,6 +622,7 @@ class WakeWordSTT:
 
         self.on_text = None       # callback(text)
         self.on_status = None     # callback(msg)
+        self.on_level = None      # callback(amplitude) — for UI mic meter
 
     # ── Public API ──
 
@@ -745,6 +746,7 @@ class WakeWordSTT:
         self._status("Listening for wake word..." if self._use_wake_word else "Listening...")
 
         cooldown_until = 0.0  # timestamp — prevent rapid re-triggers
+        _level_last = [0.0]   # throttle mic meter updates to ~10 Hz
 
         while self._running:
             if self._paused:
@@ -761,6 +763,10 @@ class WakeWordSTT:
 
             pcm_array = np.frombuffer(pcm, dtype=np.int16)
             amp = np.abs(pcm_array).mean()
+            # Throttled level callback for UI mic meter (~10 Hz)
+            if self.on_level and _time.time() - _level_last[0] > 0.1:
+                self.on_level(amp)
+                _level_last[0] = _time.time()
             ring_buffer.append(pcm_array.copy())
 
             # ── Detect trigger ──

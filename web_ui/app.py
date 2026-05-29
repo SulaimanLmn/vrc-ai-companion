@@ -1,11 +1,38 @@
 """Flask web interface for NeuroClone."""
 
+import io
 import json
 import os
+import sys
 import threading
 import time
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
+
+
+# ── Stdout capture for live debug page ──
+
+class _DebugCapture(io.TextIOBase):
+    """Redirects sys.stdout to also emit 'debug_line' via SocketIO."""
+
+    def __init__(self, socketio):
+        self.socketio = socketio
+        self._original = sys.__stdout__
+
+    def write(self, text):
+        self._original.write(text)
+        self._original.flush()
+        if text.strip():
+            try:
+                self.socketio.emit("debug_line", text)
+            except Exception:
+                pass
+
+    def flush(self):
+        self._original.flush()
+
+
+# ── .env helpers ──
 
 
 def _load_env():
@@ -80,7 +107,8 @@ def _list_windows():
 
 
 CONFIG_UI = [
-    {"key": "OPENCODE_GO_MODEL", "label": "AI Model", "type": "text", "section": "llm"},
+    {"key": "OPENCODE_GO_MODEL", "label": "AI Model", "type": "llm_model", "section": "llm"},
+    {"key": "OPENCODE_GO_BASE_URL", "label": "API Base URL", "type": "text", "section": "llm"},
     {"key": "LLM_MAX_TOKENS", "label": "Response Length (tokens)", "type": "range", "min": 50, "max": 1000, "step": 50, "section": "llm"},
     {"key": "LLM_MAX_HISTORY", "label": "Conversation Memory (exchanges)", "type": "range", "min": 0, "max": 50, "step": 1, "section": "llm", "note": "0 = unlimited"},
     {"key": "AUDIO_DEVICE_INDEX", "label": "Microphone / Audio Input", "type": "dropdown", "options_key": "input_devices", "section": "audio"},
@@ -102,6 +130,15 @@ def create_app(neuro):
 
     neuro.on_status_change = lambda status: socketio.emit("status_update", status)
     neuro.on_chat_entry = lambda role, text: socketio.emit("chat_entry", {"role": role, "text": text})
+
+    # Mic level → UI meter
+    if hasattr(neuro.stt, 'on_level'):
+        neuro.stt.on_level = lambda amp: socketio.emit("level", amp)
+
+    # Stdout capture → debug page
+    _debug_capture = _DebugCapture(socketio)
+    sys.stdout = _debug_capture
+    sys.stderr = _debug_capture
 
     # ── Config API ──
 
@@ -126,10 +163,18 @@ def create_app(neuro):
             return jsonify({"ok": False, "error": str(e)}), 500
         # Apply live updates where possible
         if "STT_SILENCE_THRESHOLD" in data:
-            try: neuro.stt.recognizer.energy_threshold = int(data["STT_SILENCE_THRESHOLD"])
+            try:
+                if hasattr(neuro.stt, 'silence_threshold'):
+                    neuro.stt.silence_threshold = int(data["STT_SILENCE_THRESHOLD"])
+                if hasattr(neuro.stt, 'recognizer'):
+                    neuro.stt.recognizer.energy_threshold = int(data["STT_SILENCE_THRESHOLD"])
             except Exception: pass
         if "STT_SILENCE_CUTOFF_SEC" in data:
-            try: neuro.stt.recognizer.pause_threshold = float(data["STT_SILENCE_CUTOFF_SEC"])
+            try:
+                if hasattr(neuro.stt, 'silence_cutoff_sec'):
+                    neuro.stt.silence_cutoff_sec = float(data["STT_SILENCE_CUTOFF_SEC"])
+                if hasattr(neuro.stt, 'recognizer'):
+                    neuro.stt.recognizer.pause_threshold = float(data["STT_SILENCE_CUTOFF_SEC"])
             except Exception: pass
         if "TTS_PITCH" in data:
             try: neuro.tts.set_pitch(int(data["TTS_PITCH"]))
@@ -191,5 +236,15 @@ def create_app(neuro):
     @app.route("/api/test_tts", methods=["POST"])
     def api_test_tts():
         return jsonify(neuro.test_tts())
+
+    @app.route("/api/test_wake_word", methods=["POST"])
+    def api_test_wake_word():
+        """Simple ping — wake word is tested by saying it and watching status."""
+        return jsonify({"success": True, "message": "Say your wake word and check the status dot."})
+
+    @app.route("/api/export_log")
+    def api_export_log():
+        log = neuro.get_chat_log()
+        return jsonify(log)
 
     return app, socketio

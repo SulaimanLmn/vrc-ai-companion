@@ -106,7 +106,6 @@ class NeuroClone:
             latency_mark("TTS end")
             self.is_speaking = False
             self.stt.resume()
-            reset_latency()  # ready for next interaction
             self._broadcast_status()
 
         self.tts.on_speaking_start = _on_speaking_start
@@ -262,6 +261,7 @@ class NeuroClone:
         """STT callback: received transcribed speech."""
         if not self.enabled:
             return
+        reset_latency()
         latency_mark("text received")
         if self.ptt_active or True:  # always process when enabled; PTT gates STT start/stop
             self._process_input(text)
