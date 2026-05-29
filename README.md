@@ -1,4 +1,4 @@
-# vrc-ai-companion
+# Companion
 
 Real-time AI voice companion for VRChat with offline wake word, speech recognition, and text-to-speech.
 
@@ -9,8 +9,8 @@ Mic audio (user's PC / loopback)
         │
         ▼
   ┌─────────────────┐
-  │  Vosk (offline) │  ← local wake word detection, no API key
-  │  keyphrase      │      "computer", "next time", etc.
+  │  Vosk (offline) │  ← local wake word detection, no signup
+  │  keyphrase      │      (e.g., "computer", "hey vox")
   │  spotting       │
   └────────┬────────┘
            │  wake word detected
@@ -22,16 +22,16 @@ Mic audio (user's PC / loopback)
            │  transcribed text
            ▼
   ┌─────────────────┐     ┌──────────────────┐
-  │  LLM (OpenCode  │────▶│  Azure TTS       │
-  │  Go, OpenAI,    │     │  → speaker output│
-  │  etc.)          │     │  → VRChat mic    │
+  │  LLM (OpenAI-   │────▶│  Azure TTS       │
+  │  compatible)    │     │  → speaker output│
+  │                 │     │  → VRChat mic    │
   └────────┬────────┘     └────────┬─────────┘
            │                       │
            ▼                       ▼
   ┌─────────────────┐     ┌──────────────────┐
   │  VRChat OSC     │     │  Web UI          │
-  │  ChatBox        │     │  (status, config,│
-  │  word-by-word   │     │   chat log)      │
+  │  ChatBox        │     │  (sidebar, chat, │
+  │  word-by-word   │     │   tests, debug)  │
   └─────────────────┘     └──────────────────┘
 ```
 
@@ -59,8 +59,8 @@ cp .env.example .env
 
 Edit `.env` with your:
 - Azure Speech key & region (for STT + TTS)
-- LLM API key & model (OpenCode Go or any OpenAI-compatible API)
-- `WAKE_KEYWORD` — the wake word phrase (e.g., `computer`, `next time`)
+- LLM API key, base URL, and model (any OpenAI-compatible API)
+- `WAKE_KEYWORD` — the wake word phrase (e.g., `computer`, `hey vox`)
 - VRChat OSC settings
 - Audio device indices (run `python main.py --list-devices`)
 
@@ -124,7 +124,7 @@ python resolve_devices.py  <index>
 pip uninstall comtypes pycaw psutil -y
 ```
 
-### Voicemeeter Banana Setup (Recommended)
+### Voicemeeter Setup (Recommended)
 
 For full audio control, use **Voicemeeter Banana** to route audio between all components.
 
@@ -140,7 +140,7 @@ For full audio control, use **Voicemeeter Banana** to route audio between all co
 ```
                     HW1 (Mic)   VAIO (VRChat)   VAIO3 (TTS via Line 1)
                     ─────────   ─────────────   ─────────────────────
-  A1 (Your TWS)       ●            ●                 ○
+  A1 (Headphones)     ●            ●                 ○
   B1 (VRChat mic)     ●            ○                 ●
   B2 (→ STT)          ●            ●                 ○
 ```
@@ -153,11 +153,19 @@ For full audio control, use **Voicemeeter Banana** to route audio between all co
 
 ---
 
-## ⚠️ Important: VRChat OSC / ChatBox Code
+## Web Interface
 
-The file `vrchat_osc.py` handles all VRChat chatbox text streaming (word-by-word, 144-char limit, typing indicator). This code has been carefully tuned and tested.
+The web UI (`http://localhost:5000`) has a sidebar with three main pages:
 
-**Do not modify `vrchat_osc.py` or the streaming logic in `main.py` without explicit permission.**
+| Page | Contents |
+|------|----------|
+| **Conversation** | Chat log with message history, text input, export/clear buttons |
+| **Tests** | Test buttons for LLM, STT, TTS, and wake word, each with result area |
+| **Debug** | Live console output from the backend — shows all logs, errors, latency markers |
+
+The top bar shows a **status dot** (green = on, red = off) with a **state tag** (ON / LISTENING / THINKING / SPEAKING), a **live mic level meter**, and the Enable/Disable toggle.
+
+**Settings** opens as a slide-out panel from the right. Changes that require a restart show a warning in the save notification.
 
 ---
 
@@ -165,13 +173,13 @@ The file `vrchat_osc.py` handles all VRChat chatbox text streaming (word-by-word
 
 | File | Purpose |
 |------|---------|
-| `main.py` | Main orchestrator + entry point |
+| `main.py` | Main orchestrator (`Companion` class) + entry point |
 | `stt.py` | `WakeWordSTT` (Vosk + PyAudio + Azure) and legacy `AzureSTT` |
 | `llm_client.py` | LLM client (OpenAI-compatible API) |
 | `tts.py` | Azure TTS with queuing and WASAPI UUID routing |
 | `vrchat_osc.py` | VRChat OSC ChatBox integration |
 | `config.py` | Configuration from .env |
-| `web_ui/` | Flask web interface (status, settings, chat log) |
+| `web_ui/` | Flask web interface (sidebar, chat log, tests, debug console) |
 | `resolve_devices.py` | Helper to find WASAPI device UUIDs for TTS routing |
 | `CLI_FLAGS.md` | Documentation for all CLI flags |
 
@@ -182,10 +190,10 @@ The file `vrchat_osc.py` handles all VRChat chatbox text streaming (word-by-word
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AZURE_SPEECH_KEY` | — | Azure Speech subscription key |
-| `AZURE_SPEECH_REGION` | — | Azure region (e.g., `eastasia`) |
-| `OPENCODE_GO_API_KEY` | — | LLM API key |
-| `OPENCODE_GO_BASE_URL` | — | LLM endpoint URL |
-| `OPENCODE_GO_MODEL` | — | Model name |
+| `AZURE_SPEECH_REGION` | — | Azure region (dropdown in settings) |
+| `LLM_API_KEY` | — | LLM API key |
+| `LLM_BASE_URL` | — | LLM endpoint URL |
+| `LLM_MODEL` | — | Model name (dropdown or text input) |
 | `VRC_CHATBOX_IP` | `127.0.0.1` | VRChat OSC IP |
 | `VRC_CHATBOX_PORT` | `9000` | VRChat OSC port |
 | `AUDIO_DEVICE_INDEX` | `-1` | STT input device index |
@@ -199,18 +207,20 @@ The file `vrchat_osc.py` handles all VRChat chatbox text streaming (word-by-word
 | `WAKE_KEYWORD` | `computer` | Vosk wake word phrase (empty = disabled) |
 | `VISION_TRIGGER_PHRASE` | `look at this` | Phrase to trigger screen capture |
 | `VISION_CAPTURE_WINDOW` | `VRChat` | Window title to capture for vision |
+| `LLM_MAX_TOKENS` | `150` | Max response tokens |
+| `LLM_MAX_HISTORY` | `5` | Past exchanges to remember (0 = unlimited) |
 
 ## Tips
 
-- **Lower latency**: Use a fast LLM model (`mimo-v2.5`, `deepseek-v4-flash`)
-- **Reduce `LLM_MAX_TOKENS`** in `.env` for shorter, faster responses
+- **Lower latency**: Use a fast LLM model
+- **Reduce `LLM_MAX_TOKENS`** for shorter, faster responses
 - **Reduce `STT_SILENCE_CUTOFF_SEC`** (e.g., `1.0`) for faster detection
 - **Run `python main.py --list-devices`** to find audio device indices
 - **Test LLM**: Click "Test LLM" in the web UI to verify your connection
 
 ## Troubleshooting
 
-- **LLM not responding**: Check `OPENCODE_GO_API_KEY` and `OPENCODE_GO_BASE_URL`
+- **LLM not responding**: Check your API key and base URL in settings
 - **Wake word not detected**: Run `pip install vosk` — model auto-downloads on first run
 - **False wake triggers**: Increase `STT_SILENCE_THRESHOLD` or use a less common keyword
 - **STT not picking up speech**: Lower `STT_SILENCE_THRESHOLD` (try 200-300)

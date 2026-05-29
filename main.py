@@ -19,9 +19,9 @@ import os
 from config import (
     AZURE_SPEECH_KEY,
     AZURE_SPEECH_REGION,
-    OPENCODE_GO_API_KEY,
-    OPENCODE_GO_BASE_URL,
-    OPENCODE_GO_MODEL,
+    LLM_API_KEY,
+    LLM_BASE_URL,
+    LLM_MODEL,
     LLM_MAX_TOKENS,
     LLM_MAX_HISTORY,
     VISION_TRIGGER_PHRASE,
@@ -45,7 +45,7 @@ from tts import AzureTTS
 from vrchat_osc import ChatBox
 
 
-class NeuroClone:
+class Companion:
     """Core state machine and component wiring."""
 
     def __init__(self):
@@ -80,9 +80,9 @@ class NeuroClone:
         self.stt.on_status = self._on_stt_status
 
         self.llm = LLMClient(
-            api_key=OPENCODE_GO_API_KEY,
-            base_url=OPENCODE_GO_BASE_URL,
-            model=OPENCODE_GO_MODEL,
+            api_key=LLM_API_KEY,
+            base_url=LLM_BASE_URL,
+            model=LLM_MODEL,
             system_prompt=SYSTEM_PROMPT,
             max_tokens=LLM_MAX_TOKENS,
             max_history=LLM_MAX_HISTORY,
@@ -132,12 +132,12 @@ class NeuroClone:
         if self.enabled:
             self.stt.start()
             self.tts.start()      # Creates TTS thread once; subsequent calls just unpause
-            self._log("system", "NeuroClone enabled")
+            self._log("system", "Companion enabled")
         else:
             self.ptt_active = False
             self.stt.stop()
             self.tts.pause()      # Drains queue but keeps synthesizer alive
-            self._log("system", "NeuroClone disabled")
+            self._log("system", "Companion disabled")
         self._broadcast_status()
 
     def toggle_ptt(self):
@@ -440,17 +440,17 @@ def main():
     if not AZURE_SPEECH_KEY:
         print("ERROR: AZURE_SPEECH_KEY not set. Copy .env.example to .env and fill in your keys.")
         sys.exit(1)
-    if not OPENCODE_GO_API_KEY:
-        print("ERROR: OPENCODE_GO_API_KEY not set. Copy .env.example to .env and fill in your keys.")
+    if not LLM_API_KEY:
+        print("ERROR: LLM_API_KEY not set. Copy .env.example to .env and fill in your keys.")
         sys.exit(1)
 
-    neuro = NeuroClone()
+    neuro = Companion()
 
     # Start web UI
     from web_ui.app import create_app
     app, socketio = create_app(neuro)
     print(f"\n{'='*50}")
-    print(f"  NeuroClone — AI VTuber for VRChat")
+    print(f"  Companion — AI VTuber for VRChat")
     print(f"{'='*50}")
     print(f"\n  Web UI: http://localhost:{WEB_PORT}")
     print(f"  Press Ctrl+C to stop\n")

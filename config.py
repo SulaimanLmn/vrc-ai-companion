@@ -11,9 +11,9 @@ AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY", "")
 AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "eastasia")
 
 # LLM (OpenCode Go — OpenAI-compatible)
-OPENCODE_GO_API_KEY = os.getenv("OPENCODE_GO_API_KEY", "")
-OPENCODE_GO_BASE_URL = os.getenv("OPENCODE_GO_BASE_URL", "https://opencode.ai/zen/go/v1")
-OPENCODE_GO_MODEL = os.getenv("OPENCODE_GO_MODEL", "mimo-v2.5-pro")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://opencode.ai/zen/go/v1")
+LLM_MODEL = os.getenv("LLM_MODEL", "mimo-v2.5")
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "150"))
 LLM_MAX_HISTORY = int(os.getenv("LLM_MAX_HISTORY", "5"))
 

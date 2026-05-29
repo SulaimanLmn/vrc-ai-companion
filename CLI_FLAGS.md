@@ -11,10 +11,10 @@
 ### Examples
 
 ```bash
-# List audio devices (find your mic and loopback indices)
+# List audio devices (find your mic indices)
 python main.py --list-devices
 
-# List window titles (find the window name for screen capture)
+# List window titles (find the window for screen capture)
 python main.py --list-windows
 
 # Normal startup
@@ -42,4 +42,4 @@ Then set the UUID in `.env` as `TTS_OUTPUT_DEVICE_UUID`.
 
 ### Note
 
-`comtypes` and `pycaw` are required only for this script. Do not install them in the main runtime environment — they conflict with PyAudio's COM initialization and cause segfaults.
+`comtypes` and `pycaw` are required only for this script. Do not install them in the main runtime environment — they conflict with PyAudio's COM initialization and cause errors.

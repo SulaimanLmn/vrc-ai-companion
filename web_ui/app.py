@@ -1,4 +1,4 @@
-"""Flask web interface for NeuroClone."""
+"""Flask web interface for Companion."""
 
 import io
 import json
@@ -41,18 +41,45 @@ class _DebugCapture(io.TextIOBase):
 
 
 def _load_env():
-    """Read .env file into a dict."""
+    """Read .env file into a dict (handles multi-line quoted values)."""
     env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
     env_path = os.path.abspath(env_path)
     values = {}
-    if os.path.exists(env_path):
-        with open(env_path, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, _, val = line.partition("=")
-                values[key.strip()] = val.strip()
+    if not os.path.exists(env_path):
+        return values
+    with open(env_path, encoding="utf-8") as f:
+        lines = f.readlines()
+    # Merge multi-line quoted values into single lines
+    merged = []
+    buf = ""
+    in_quote = False
+    for line in lines:
+        stripped = line.rstrip("\n")
+        if in_quote:
+            buf += "\n" + stripped
+            if stripped.endswith('"'):
+                in_quote = False
+                merged.append(buf)
+                buf = ""
+            continue
+        if "=" not in stripped or stripped.startswith("#"):
+            merged.append(stripped)
+            continue
+        key, _, val = stripped.partition("=")
+        # Detect start of multi-line value: value is only '"' and line ends with '='
+        if val.strip() == '"' or (val.strip().startswith('"') and not stripped.rstrip().endswith('"')):
+            in_quote = True
+            buf = stripped
+        else:
+            merged.append(stripped)
+    if buf:
+        merged.append(buf)
+    for line in merged:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        values[key.strip()] = val.strip().strip('"')
     return values
 
 
@@ -72,12 +99,21 @@ def _save_env(updates: dict):
         if "=" in stripped and not stripped.startswith("#"):
             key = stripped.split("=", 1)[0].strip()
             if key in updated_keys:
-                new_lines.append(f"{key}={updates[key]}\n")
+                val = updates[key]
+                # Write multi-line values in quoted format
+                if "\n" in val:
+                    new_lines.append(f'{key}="\n{val}\n"\n')
+                else:
+                    new_lines.append(f"{key}={val}\n")
                 updated_keys.discard(key)
                 continue
         new_lines.append(line)
     for key in updated_keys:
-        new_lines.append(f"{key}={updates[key]}\n")
+        val = updates[key]
+        if "\n" in val:
+            new_lines.append(f'{key}="\n{val}\n"\n')
+        else:
+            new_lines.append(f"{key}={val}\n")
     with open(env_path, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
 
@@ -112,14 +148,26 @@ def _list_windows():
 
 
 CONFIG_UI = [
-    {"key": "OPENCODE_GO_MODEL", "label": "AI Model", "type": "llm_model", "section": "llm"},
-    {"key": "OPENCODE_GO_BASE_URL", "label": "API Base URL", "type": "text", "section": "llm"},
-    {"key": "LLM_MAX_TOKENS", "label": "Response Length (tokens)", "type": "range", "min": 50, "max": 1000, "step": 50, "section": "llm"},
+    {"key": "LLM_API_KEY", "label": "LLM API Key", "type": "password", "section": "llm"},
+    {"key": "LLM_BASE_URL", "label": "API Base URL", "type": "text", "section": "llm"},
+    {"key": "LLM_MODEL", "label": "AI Model", "type": "llm_model", "section": "llm"},
+    {"key": "LLM_MAX_TOKENS", "label": "Response Length (tokens)", "type": "range", "min": 50, "max": 5000, "step": 50, "section": "llm"},
     {"key": "LLM_MAX_HISTORY", "label": "Conversation Memory (exchanges)", "type": "range", "min": 0, "max": 50, "step": 1, "section": "llm", "note": "0 = unlimited"},
     {"key": "AUDIO_DEVICE_INDEX", "label": "Microphone / Audio Input", "type": "dropdown", "options_key": "input_devices", "section": "audio"},
     {"key": "STT_CAPTURE_MODE", "label": "Capture Mode", "type": "dropdown", "options": ["loopback", "microphone"], "section": "audio"},
     {"key": "STT_SILENCE_THRESHOLD", "label": "Mic Sensitivity", "type": "range", "min": 100, "max": 2000, "step": 50, "section": "stt"},
     {"key": "STT_SILENCE_CUTOFF_SEC", "label": "Silence Wait (seconds)", "type": "range", "min": 0.5, "max": 5.0, "step": 0.25, "section": "stt"},
+    {"key": "AZURE_SPEECH_KEY", "label": "Azure Speech Key", "type": "password", "section": "stt"},
+    {"key": "AZURE_SPEECH_REGION", "label": "Azure Region", "type": "dropdown", "section": "stt", "options": [
+        "australiaeast","brazilsouth","canadacentral","canadaeast",
+        "centralindia","centralus","eastasia","eastus","eastus2",
+        "francecentral","germanywestcentral","italynorth","japaneast",
+        "japanwest","koreacentral","northcentralus","northeurope",
+        "norwayeast","qatarcentral","southafricanorth","southcentralus",
+        "southeastasia","swedencentral","switzerlandnorth","switzerlandwest",
+        "uaenorth","uksouth","ukwest","westcentralus","westeurope",
+        "westus","westus2","westus3"
+    ]},
     {"key": "TTS_PITCH", "label": "Voice Pitch (%)", "type": "range", "min": -50, "max": 50, "step": 5, "section": "tts"},
     {"key": "ACTIVATION_PHRASE", "label": "Text Filter (phrase to respond to)", "type": "text", "section": "general", "note": "Empty = respond to everything"},
     {"key": "VISION_TRIGGER_PHRASE", "label": "Screen Capture Phrase", "type": "text", "section": "vision"},
@@ -130,7 +178,7 @@ CONFIG_UI = [
 
 def create_app(neuro):
     app = Flask(__name__, template_folder="templates")
-    app.config["SECRET_KEY"] = "neuro-clone-secret"
+    app.config["SECRET_KEY"] = "companion-secret"
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
     neuro.on_status_change = lambda status: socketio.emit("status_update", status)
@@ -192,7 +240,7 @@ def create_app(neuro):
         # Only flag keys that actually changed value
         needs_restart = [
             k for k in data if k in (
-                "AUDIO_DEVICE_INDEX", "STT_CAPTURE_MODE", "OPENCODE_GO_MODEL",
+                "AUDIO_DEVICE_INDEX", "STT_CAPTURE_MODE", "LLM_MODEL",
                 "VISION_CAPTURE_WINDOW", "ACTIVATION_PHRASE", "VISION_TRIGGER_PHRASE",
             ) and data.get(k) != before.get(k)
         ]
