@@ -1,167 +1,162 @@
-# NeuroClone — Architecture & Project Guide
-
-> For AI models and developers: understand this project at a glance.
+# Project Architecture
 
 ## Purpose
 
-A Neuro-sama-inspired AI companion for **VRChat**. Listens to nearby conversation through VRChat's audio output, thinks via an LLM, and responds out loud through the user's microphone — while simultaneously displaying the response as typed text in VRChat's chatbox.
+An AI voice companion for **VRChat**. Listens via a microphone (or desktop loopback), detects a wake word locally via Vosk, records the full utterance, transcribes it with Azure STT, generates a response via LLM, and speaks back through the user's microphone while displaying the text in VRChat's chatbox.
 
-## The Flow (Input → Output)
+## The Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        VRChat World                              │
-│                                                                  │
-│  Other Players talk ──► VRChat audio plays on user's PC          │
-│                           │                                       │
-└───────────────────────────┼───────────────────────────────────────┘
-                            │  WASAPI Loopback Capture
-                            ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  1. STT (Azure Speech Service)                                   │
-│     • sounddevice captures desktop audio output via WASAPI       │
-│       loopback (hears what user hears from VRChat)               │
-│     • VAD: detects speech vs silence using amplitude threshold   │
-│     • When silence detected → sends audio chunk to Azure STT    │
-│     • Returns transcribed text                                   │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │  "Hey what do you think about..."
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  2. LLM (OpenCode Go → DeepSeek V4 Flash)                        │
-│     • Sends transcribed text as user message                     │
-│     • Includes system prompt + conversation history (last 20)    │
-│     • Base URL: https://opencode.ai/zen/go/v1                   │
-│     • Model: DeepSeek V4 Flash (fastest, cheapest)               │
-│     • Returns AI response text                                   │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │  "That sounds awesome! I'd totally..."
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  3. OUTPUT — Dual Channel                                        │
-│     ┌─────────────────────┐  ┌─────────────────────────────┐    │
-│     │ 3a. TTS (Azure)     │  │ 3b. OSC (VRChat ChatBox)    │    │
-│     │ • Text queued to    │  │ • Types response with       │    │
-│     │   Azure TTS         │  │   streaming characters      │    │
-│     │ • Synthesized audio │  │ • /chatbox/typing indicator │    │
-│     │   plays through     │  │ • /chatbox/input sends text │    │
-│     │   default speaker   │  │   shown in-game to others   │    │
-│     │                     │  │                             │    │
-│     │ Windows default     │  │ VRChat OSC port: 9000       │    │
-│     │ playback → VB-CABLE │  │                             │    │
-│     │ → set as VRChat mic │  │                             │    │
-│     │ → broadcasts to     │  │                             │    │
-│     │   everyone in world │  │                             │    │
-│     └─────────────────────┘  └─────────────────────────────┘    │
-└──────────────────────────────────────────────────────────────────┘
+Mic / desktop audio
+        │
+        ▼
+┌───────────────────────────────────────────┐
+│  1. WakeWordSTT (stt.py)                  │
+│                                           │
+│  ┌─────────┐    ┌──────────────────────┐  │
+│  │ PyAudio │    │ Ring buffer (~1.5s)  │  │
+│  │ stream  │───▶│ (keeps recent audio) │  │
+│  └────┬────┘    └──────────────────────┘  │
+│       │                                    │
+│       ▼   energy gate (skip silence)       │
+│  ┌─────────┐                               │
+│  │  Vosk   │  offline keyphrase spotting   │
+│  │ (16kHz) │  "computer", "next time", ... │
+│  └────┬────┘                               │
+│       │  keyword detected                  │
+│       ▼                                    │
+│  ┌──────────────────────────────────┐      │
+│  │ Continue recording → VAD silence │      │
+│  │ → resample → Azure STT           │      │
+│  │ → callback(text)                 │      │
+│  └──────────────────────────────────┘      │
+└────────────────────┬──────────────────────┘
+                     │  transcribed text
+                     ▼
+┌───────────────────────────────────────────┐
+│  2. LLM (llm_client.py)                    │
+│     • Sends text + history + system prompt │
+│     • Blocks until full response received  │
+│     • Also supports streaming + vision     │
+└────────────────────┬──────────────────────┘
+                     │  AI response text
+                     ▼
+┌───────────────────────────────────────────┐
+│  3. OUTPUT — Dual Channel                   │
+│     ┌────────────────┐  ┌────────────────┐ │
+│     │ 3a. TTS (Azure)│  │ 3b. OSC ChatBox│ │
+│     │ • enqueue()    │  │ • stream_text()│ │
+│     │ • async synth  │  │ • word-by-word │ │
+│     │ • WASAPI UUID  │  │ • 144-char     │ │
+│     │   device route │  │   splitting    │ │
+│     │ • pitch SSML   │  │ • typing ind.  │ │
+│     └────────────────┘  └────────────────┘ │
+└─────────────────────────────────────────────┘
 ```
 
 ## State Machine
 
 ```
-OFF ──[Enable]──► ON ──[PTT toggle]──► LISTENING (PTT)
- │                  │                        │
- │                  │  speech detected        │
- │                  ▼                        ▼
- │              THINKING ◄─────── STT text received
- │                  │
- │                  ▼
- │              SPEAKING (TTS playing)
- │                  │
- │                  ▼
- │              ON (back to listening)
- │
- └──[Disable]──► OFF (stop STT + TTS)
+OFF ──[Enable]──► ON (Vosk listening for keyword)
+                      │
+                      │  wake word detected
+                      ▼
+                  RECORDING (VAD listening)
+                      │
+                      │  silence detected
+                      ▼
+                TRANSCRIBING (Azure STT)
+                      │
+                      │  text received
+                      ▼
+                THINKING (LLM processing)
+                      │
+                      ▼
+                SPEAKING (TTS playing + OSC streaming)
+                      │
+                      │  TTS done
+                      ▼
+                  ON (back to listening)
 ```
-
-## Key Configuration (.env)
-
-| Variable | Purpose | Default |
-|---|---|---|
-| `AZURE_SPEECH_KEY` | Azure Speech Service key (used for both STT and TTS) | (required) |
-| `AZURE_SPEECH_REGION` | Azure region | `eastasia` |
-| `OPENCODE_GO_API_KEY` | LLM API key | (required) |
-| `OPENCODE_GO_BASE_URL` | LLM API endpoint | `https://opencode.ai/zen/go/v1` |
-| `OPENCODE_GO_MODEL` | LLM model name | `mimo-v2.5-pro` |
-| `STT_CAPTURE_MODE` | `loopback` (desktop audio) or `microphone` | `loopback` |
-| `STT_SILENCE_THRESHOLD` | Amplitude threshold for speech detection | `500` |
-| `STT_SILENCE_CUTOFF_SEC` | Seconds of silence before transcribing | `2.0` |
-| `VRC_CHATBOX_IP` | VRChat OSC target IP | `127.0.0.1` |
-| `VRC_CHATBOX_PORT` | VRChat OSC port | `9000` |
-| `SYSTEM_PROMPT` | AI personality prompt | Playful, witty companion |
 
 ## Components
 
-### `main.py` — Orchestrator
-- `NeuroClone` class: state machine + component wiring
-- Connects STT → LLM → TTS + OSC pipeline
-- Handles debouncing (won't process while already processing/speaking)
-- Web UI integration (Flask + SocketIO)
-- Entry point: `python main.py`
+### `stt.py` — WakeWordSTT
 
-### `stt.py` — Speech-to-Text
-- Uses `sounddevice` for audio capture
-- **Loopback mode**: WASAPI loopback captures desktop audio (hears VRChat people)
-- **Microphone mode**: captures from specific input device
-- VAD: amplitude-based speech/silence detection
-- Streams audio chunks to Azure Speech Service for transcription
-- Fires callback when text received
+- Single PyAudio stream at device's native sample rate
+- Ring buffer keeps ~1.5s of recent audio
+- Vosk processes 16kHz-resampled frames (energy gate: silent frames skipped)
+- On keyword match: prepend ring buffer, continue recording with VAD, trim silence, resample to 16kHz, send to Azure STT
+- Vosk state reset after each cycle + 3s cooldown prevents re-trigger
+- Falls back to energy-VAD (amplitude threshold) when Vosk is unavailable
 
 ### `llm_client.py` — LLM Client
-- OpenAI-compatible API client (works with OpenCode Go)
-- Maintains conversation history (last 20 messages)
-- Supports both blocking and streaming responses
-- Default: `https://opencode.ai/zen/go/v1` with `mimo-v2.5-pro`
 
-### `tts.py` — Text-to-Speech
-- Azure Speech Service TTS
-- Queue-based: multiple texts can be queued
-- Plays through default speaker (route to VB-CABLE for VRChat mic)
-- Callbacks for speaking start/end (used for state tracking)
+- OpenAI-compatible API (works with OpenCode Go, OpenAI, or any compatible endpoint)
+- Conversation history (configurable depth, 0 = unlimited)
+- `chat()` — blocking full response
+- `chat_stream()` — streaming tokens via callback
+- `chat_with_image()` — text + image input for vision
 
-### `vrchat_osc.py` — VRChat Integration
-- Sends messages via OSC to VRChat ChatBox API
-- `/chatbox/input` — sends text message
-- `/chatbox/typing` — shows typing indicator
-- `stream_text()` — character-by-character typing animation
+### `tts.py` — AzureTTS
 
-### `web_ui/` — Web Dashboard
-- Flask + SocketIO for real-time updates
-- Features: Enable/Disable, PTT button, Reset, Test LLM
-- Manual text input (type messages without speaking)
+- Single persistent SpeechSynthesizer (kept alive to avoid WASAPI driver corruption)
+- Queue-based: `enqueue(text)` adds to play queue
+- WASAPI UUID device routing via `AudioOutputConfig(device_name=uuid)`
+- SSML with configurable voice and pitch
+- Callbacks: `on_speaking_start`, `on_speaking_end`
+
+### `vrchat_osc.py` — ChatBox
+
+- OSC client for VRChat chatbox
+- `stream_text()` — word-by-word incremental display with auto-calculated timing
+- 144-char message splitting at sentence boundaries
+- Typing indicator (`/chatbox/typing`)
+- UDP reordering fix: final authoritative send per chunk
+
+### `web_ui/` — Flask Dashboard
+
+- Status dot (OFF / ON / THINKING / SPEAKING)
+- Enable/Disable, Push-to-Talk, Test buttons
 - Live chat log with color-coded entries
-- Keyboard shortcuts: Space (hold) = PTT, E = toggle enable
+- Settings panel: slide-out from right with live device dropdowns, sliders, text areas
+- Keyboard shortcuts: Space (PTT), E (toggle)
 
-## External Dependencies
+## Key Configuration (.env)
 
-| Software | Purpose | URL |
-|---|---|---|
-| **VB-CABLE** | Route TTS audio to VRChat mic | https://vb-audio.com/Cable/ |
-| **VRChat OSC** | ChatBox integration (built into VRChat) | Enable in VRChat Settings |
-| **Azure Speech Service** | STT + TTS | Azure portal |
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `AZURE_SPEECH_KEY` | — | Shared by STT and TTS |
+| `AZURE_SPEECH_REGION` | `eastasia` | Azure region |
+| `OPENCODE_GO_API_KEY` | — | LLM API key |
+| `OPENCODE_GO_BASE_URL` | `https://opencode.ai/zen/go/v1` | LLM endpoint |
+| `OPENCODE_GO_MODEL` | `mimo-v2.5` | LLM model |
+| `WAKE_KEYWORD` | `computer` | Vosk wake word (empty = VAD fallback) |
+| `AUDIO_DEVICE_INDEX` | `-1` | PyAudio input device index |
+| `STT_SILENCE_THRESHOLD` | `500` | Amplitude threshold |
+| `STT_SILENCE_CUTOFF_SEC` | `2.0` | Silence wait before transcribing |
+| `TTS_OUTPUT_DEVICE_UUID` | `""` | WASAPI UUID for TTS output |
+| `TTS_PITCH` | `0` | TTS pitch adjustment (%) |
+| `SYSTEM_PROMPT` | — | AI personality |
+| `LLM_MAX_TOKENS` | `150` | Max response tokens |
+| `LLM_MAX_HISTORY` | `5` | Past exchanges to remember |
+| `VISION_TRIGGER_PHRASE` | `look at this` | Trigger for screen capture |
+| `VISION_CAPTURE_WINDOW` | `VRChat` | Window title for capture |
 
-## Setup Summary (Windows)
+## Key Design Decisions
 
-1. `git clone` → `pip install -r requirements.txt`
-2. Copy `.env.example` → `.env`, fill in keys
-3. Install VB-CABLE, set Windows playback → VB-CABLE Input, set Windows recording → VB-CABLE Output as VRChat mic
-4. Enable OSC in VRChat Settings
-5. `python main.py` → open `http://localhost:5000`
-6. Click **Test LLM** to verify connection, then **Enable**
+- **Vosk over Porcupine**: 100% open-source, no API key or signup required, runs entirely offline
+- **Energy gate**: Silent frames are never fed to Vosk — prevents keyword hallucination in noise floor
+- **Vosk reset on resume**: Clears recognition state after TTS pause so stale context doesn't trigger
+- **Word-boundary keyword matching**: `\bthe single\b` regex, not substring — prevents "the singles" from triggering
+- **Single persistent TTS synthesizer**: Destroying/recreating Azure SDK synthesizer corrupts WASAPI audio driver
+- **WASAPI UUID for TTS**: Azure SDK ignores friendly device names; must use `{0.0.0.00000000}.{...}` format
+- **Ring buffer prepend**: Wake word audio is included in the recording so Azure transcribes the full utterance including the trigger word (which is then stripped from the LLM input)
+- **One Azure STT call per interaction**: Wake word gates the audio, so only real user speech incurs API cost
 
-## Available LLM Models (OpenCode Go)
+## CLI Flags
 
-- **mimo-v2.5-pro** — recommended (works with full responses, needs ~50+ tokens for short answers)
-- **Qwen3.6 Plus** — very good quality, good humor (more expensive)
-- **Qwen3.5 Plus** — slightly older Qwen (more expensive)
-- **MiniMax M2.7** — great for roleplay/humor
-- **Kimi K2.6** — good but verbose
-- **DeepSeek V4 Flash** — fastest, cheapest (returns empty content)
-- **DeepSeek V4 Pro** — higher quality, slower (returns empty content)
-- **MiniMax M2.5** — older MiniMax (returns empty content)
-- **MiMo-V2.5** — basic MiMo (returns empty content)
-- **GLM-5.1** — Zhipu model (returns empty content)
-- **GLM-5** — older GLM (returns empty content)
+See `CLI_FLAGS.md` for `--list-devices`, `--list-windows`, and `resolve_devices.py` usage.
 
 ## License
 

@@ -1,22 +1,24 @@
 # Audio Test Files for STT Testing
 
-Place audio files here to test Speech-to-Text.
+Place audio files here to test speech-to-text via "Test STT" in the web UI.
 
 ## Supported formats
-- `.wav` - Preferred (16kHz mono PCM)
-- `.mp3` - Also supported
-- `.ogg` - Also supported
-
-## Recommended test phrase
-Record a short audio file (1-3 seconds) saying:
-**"Hello from NeuroClone test"**
+- `.wav` — Preferred (16 kHz mono PCM)
+- `.mp3` — Also supported
+- `.ogg` — Also supported
 
 ## How to test
-1. Record your test audio and save as `test.wav` (or any supported format)
-2. Click **"Test STT"** button in the web UI at http://localhost:5000
+1. Record a short audio file (1-5 seconds) and save as `test.wav`
+2. Click **"Test STT"** button in the web UI at `http://localhost:5000`
 3. The transcription result will appear in an alert
 
 ## Notes
-- Azure STT works best with clear speech in English
-- Keep recordings short (under 10 seconds) for quick testing
+- Works with both `WakeWordSTT` (Vosk + Azure) and legacy `AzureSTT` modes
+- For wake word testing: record a file containing your `WAKE_KEYWORD` phrase (e.g., "computer what's the weather")
+- For Azure STT testing: any clear English speech works
 - For Windows: Use Voice Recorder app or Audacity to create WAV files
+
+## Tips
+- Keep recordings under 10 seconds
+- 16 kHz mono WAV gives best results (no resampling needed)
+- Higher sample rates are resampled automatically

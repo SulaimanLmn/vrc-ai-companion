@@ -39,3 +39,7 @@ python resolve_devices.py 5
 ```
 
 Then set the UUID in `.env` as `TTS_OUTPUT_DEVICE_UUID`.
+
+### Note
+
+`comtypes` and `pycaw` are required only for this script. Do not install them in the main runtime environment — they conflict with PyAudio's COM initialization and cause segfaults.
