@@ -22,11 +22,16 @@ class _DebugCapture(io.TextIOBase):
     def write(self, text):
         self._original.write(text)
         self._original.flush()
-        if text.strip():
+        if text.strip() and not self._is_http_log(text):
             try:
                 self.socketio.emit("debug_line", text)
             except Exception:
                 pass
+
+    @staticmethod
+    def _is_http_log(text: str) -> bool:
+        """Filter out Flask/Werkzeug HTTP request logs."""
+        return ('"GET' in text or '"POST' in text) and 'HTTP/1.' in text
 
     def flush(self):
         self._original.flush()
@@ -157,6 +162,8 @@ def create_app(neuro):
         data = request.get_json()
         if not data:
             return jsonify({"ok": False, "error": "No data"}), 400
+        # Snapshot current values before saving (for restart detection)
+        before = _load_env()
         try:
             _save_env(data)
         except Exception as e:
@@ -182,12 +189,14 @@ def create_app(neuro):
         if "SYSTEM_PROMPT" in data:
             try: neuro.llm.system_prompt = data["SYSTEM_PROMPT"]
             except Exception: pass
-        return jsonify({"ok": True, "needs_restart": [
+        # Only flag keys that actually changed value
+        needs_restart = [
             k for k in data if k in (
                 "AUDIO_DEVICE_INDEX", "STT_CAPTURE_MODE", "OPENCODE_GO_MODEL",
                 "VISION_CAPTURE_WINDOW", "ACTIVATION_PHRASE", "VISION_TRIGGER_PHRASE",
-            )
-        ]})
+            ) and data.get(k) != before.get(k)
+        ]
+        return jsonify({"ok": True, "needs_restart": needs_restart})
 
     # ── Existing endpoints ──
 

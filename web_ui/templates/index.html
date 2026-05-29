@@ -104,7 +104,6 @@
     .sdot.listen { background: var(--amber); box-shadow: 0 0 7px rgba(251,191,36,0.5); }
     .sdot.think { background: var(--purple); box-shadow: 0 0 7px rgba(167,139,250,0.5); }
     .sdot.speak { background: var(--teal); box-shadow: 0 0 7px rgba(45,212,191,0.5); }
-    .svalue { font-size: 15px; font-weight: 500; min-width: 80px; }
     .stag {
       font-family: 'Geist Mono', monospace; font-size: 11px;
       padding: 4px 10px; border-radius: 99px; border: 1px solid; transition: all .2s;
@@ -352,7 +351,7 @@
   <header class="top-bar">
     <div class="state-group">
       <div class="sdot off" id="sDot"></div>
-      <div class="svalue" id="sVal">Off</div>
+      <div style="width:80px;"></div>
       <div class="stag off" id="sTag">OFF</div>
     </div>
     <div class="meter-wrap">
@@ -488,7 +487,6 @@ let entries = [], enabled = false, pttActive = false;
 
 // DOM refs
 const sDot = document.getElementById('sDot');
-const sVal = document.getElementById('sVal');
 const sTag = document.getElementById('sTag');
 const btnToggle = document.getElementById('btnToggle');
 const logBody = document.getElementById('logBody');
@@ -497,32 +495,48 @@ const logCount = document.getElementById('logCount');
 const micMeter = document.getElementById('micMeter');
 
 const SM = {
-  'OFF': { cls: 'off', label: 'Off', tag: 'OFF' },
-  'ON': { cls: 'on', label: 'Ready', tag: 'ON' },
-  'LISTENING': { cls: 'listen', label: 'Listening...', tag: 'LISTENING' },
-  'THINKING': { cls: 'think', label: 'Thinking...', tag: 'THINKING' },
-  'SPEAKING': { cls: 'speak', label: 'Speaking', tag: 'SPEAKING' },
+  'OFF': { cls: 'off', tag: 'OFF' },
+  'ON': { cls: 'on', tag: 'ON' },
+  'LISTENING': { cls: 'listen', tag: 'LISTENING' },
+  'THINKING': { cls: 'think', tag: 'THINKING' },
+  'SPEAKING': { cls: 'speak', tag: 'SPEAKING' },
 };
 
+
 function updateUI(s) {
-  const m = SM[s.state] || { cls: 'off', label: s.state, tag: s.state };
-  sDot.className = 'sdot ' + m.cls;
-  sVal.textContent = m.label;
+  _lastStatus = s;
+  // Dot: red when OFF, green when ON
+  sDot.className = 'sdot ' + (s.enabled ? 'on' : 'off');
+  // Tag: shows current state acronym
+  const m = SM[s.state] || { tag: '?' };
   sTag.className = 'stag ' + m.cls;
   sTag.textContent = m.tag;
   btnToggle.textContent = s.enabled ? 'Disable' : 'Enable';
   btnToggle.classList.toggle('primary', !s.enabled);
   document.getElementById('btnToggle2').textContent = s.enabled ? 'Disable' : 'Enable';
   document.getElementById('btnToggle2').classList.toggle('primary', !s.enabled);
-  document.getElementById('statState').textContent = m.label;
+  document.getElementById('statState').textContent = s.enabled ? 'Ready' : 'Off';
   document.getElementById('statProc').textContent = s.is_processing ? 'Yes' : 'No';
   document.getElementById('statSpeak').textContent = s.is_speaking ? 'Yes' : 'No';
+  // Clear mic meter when STT isn't capturing audio
+  if (!s.enabled || s.is_speaking) {
+    micMeter.style.width = '0%';
+  }
 }
 
-// Mic level meter
+// Mic level meter — only when actively listening (not thinking/speaking)
+let _lastStatus = {};
 socket.on('level', amp => {
-  const pct = Math.min(100, amp / 10);
-  micMeter.style.width = pct + '%';
+  if (!_lastStatus.enabled || _lastStatus.is_speaking) {
+    micMeter.style.width = '0%';
+  } else {
+    const pct = Math.min(100, amp / 10);
+    micMeter.style.width = pct + '%';
+  }
+  // Reset the clear timer — if no level event arrives for 300ms,
+  // the meter goes to 0 (audio capture has likely stopped).
+  if (window._micTimer) clearTimeout(window._micTimer);
+  window._micTimer = setTimeout(() => { micMeter.style.width = '0%'; }, 300);
 });
 
 // ── Sidebar nav ──
@@ -732,19 +746,15 @@ function rUp(el) { document.getElementById(el.id + '_v').textContent = el.value;
 function escH(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escA(t) { return escH(t).replace(/"/g,'&quot;'); }
 async function saveSettings() {
-  const msg = document.getElementById('setMsg'); msg.textContent = 'Saving...'; msg.className = 'savemsg';
   const payload = {};
   configData.ui.forEach(f => { const el = document.getElementById('cfg_' + f.key); if (!el) return; let v = el.value; if (f.type === 'textarea') v = v.replace(/\n/g,'\\n'); payload[f.key] = v; });
   try {
     const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const d = await r.json();
     if (d.ok) {
-      if (d.needs_restart && d.needs_restart.length) { msg.textContent = 'Saved! Restart needed: ' + d.needs_restart.join(', '); msg.className = 'savemsg warn'; }
-      else { msg.textContent = 'Saved!'; msg.className = 'savemsg ok'; }
       toast('Settings saved' + (d.needs_restart?.length ? ' (restart needed)' : ''), 'ok');
-    } else { msg.textContent = d.error || 'Save failed'; msg.className = 'savemsg err'; }
-    setTimeout(() => { if (msg.textContent.startsWith('Saved')) msg.textContent = ''; }, 3000);
-  } catch (e) { msg.textContent = 'Failed to save'; msg.className = 'savemsg err'; }
+    } else { toast(d.error || 'Save failed', 'err'); }
+  } catch (e) { toast('Failed to save', 'err'); }
 }
 
 // ── Global actions ──
