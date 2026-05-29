@@ -1363,10 +1363,21 @@
             + '</div>';
         } else if (f.type === 'dropdown') {
           let opts; if (f.options_key === 'input_devices') opts = inputOpts; else if (f.options_key === 'windows') opts = windowOpts; else opts = (f.options || []).map(v => ({ value: v, label: v }));
-          html += '<select id="' + id + '">'; let found = false;
+          if (f.options_key === 'windows' || f.options_key === 'input_devices') {
+            html += '<div style="display:flex;gap:6px;">'
+              + '<select id="' + id + '" style="flex:1;">';
+          } else {
+            html += '<select id="' + id + '">';
+          }
+          let found = false;
           opts.forEach(o => { const sel = (o.value === cur || o.value === String(cur)) ? 'selected' : ''; if (sel) found = true; html += '<option value="' + escA(o.value) + '" ' + sel + '>' + escH(o.label) + '</option>'; });
           if (!found && cur) html += '<option value="' + escA(cur) + '" selected>' + escH(cur) + '</option>';
           html += '</select>';
+          if (f.options_key === 'windows') {
+            html += '<button class="ghost" onclick="refreshWindows()" title="Refresh window list" style="padding:8px 10px;font-size:14px;">↻</button></div>';
+          } else if (f.options_key === 'input_devices') {
+            html += '<button class="ghost" onclick="refreshInputDevices()" title="Refresh device list" style="padding:8px 10px;font-size:14px;">↻</button></div>';
+          }
         } else if (f.type === 'range') {
           const def = val(f.key, f.min);
           const max = Math.max(f.max, def);  // extend max to match actual .env value
@@ -1445,6 +1456,46 @@
         icon.className = wasHidden ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye';
       }
       btn.title = wasHidden ? 'Hide key' : 'Show key';
+    }
+
+    // ── Refresh windows list ──
+    async function refreshWindows() {
+      try {
+        const r = await fetch('/api/config');
+        const d = await r.json();
+        const sel = document.getElementById('cfg_VISION_CAPTURE_WINDOW');
+        if (!sel) return;
+        const cur = sel.value;
+        let html = '<option value="">Whole screen</option>';
+        (d.windows || []).forEach(w => {
+          const selAttr = (w === cur) ? ' selected' : '';
+          html += '<option value="' + escA(w) + '"' + selAttr + '>' + escH(w) + '</option>';
+        });
+        if (cur && !(d.windows || []).includes(cur)) {
+          html += '<option value="' + escA(cur) + '" selected>' + escH(cur) + '</option>';
+        }
+        sel.innerHTML = html;
+      } catch (e) { toast('Failed to refresh windows', 'err'); }
+    }
+
+    // ── Refresh input devices list ──
+    async function refreshInputDevices() {
+      try {
+        const r = await fetch('/api/config');
+        const d = await r.json();
+        const sel = document.getElementById('cfg_AUDIO_DEVICE_INDEX');
+        if (!sel) return;
+        const cur = sel.value;
+        let html = '<option value="">Default</option>';
+        (d.input_devices || []).forEach(dev => {
+          const selAttr = (dev.index === Number(cur)) ? ' selected' : '';
+          html += '<option value="' + dev.index + '"' + selAttr + '>' + escH(dev.name) + '</option>';
+        });
+        if (cur && !(d.input_devices || []).some(d => d.index === Number(cur))) {
+          html += '<option value="' + escA(cur) + '" selected>Device ' + cur + '</option>';
+        }
+        sel.innerHTML = html;
+      } catch (e) { toast('Failed to refresh devices', 'err'); }
     }
 
     // ── Socket.IO live updates ──

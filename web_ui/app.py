@@ -128,10 +128,18 @@ def _list_input_devices():
             info = pa.get_device_info_by_index(i)
             if info.get("maxInputChannels", 0) > 0:
                 name = info["name"]
+                # Append host API suffix (MME, WASAPI, etc.) to differentiate duplicates
+                try:
+                    host_api = pa.get_host_api_info_by_index(info["hostApi"])["name"]
+                    host_api = host_api.replace("Windows ", "").replace("DirectSound", "DSound")
+                except Exception:
+                    host_api = ""
                 marker = " [LOOPBACK]" if "loopback" in name.lower() else ""
+                suffix = f" [{host_api}]" if host_api else ""
+                full_name = name + marker + suffix
                 if name not in seen:
                     seen.add(name)
-                    devices.append({"index": i, "name": name + marker})
+                    devices.append({"index": i, "name": full_name})
         pa.terminate()
         return devices
     except Exception:
@@ -169,9 +177,10 @@ CONFIG_UI = [
         "westus","westus2","westus3"
     ]},
     {"key": "TTS_PITCH", "label": "Voice Pitch (%)", "type": "range", "min": -50, "max": 50, "step": 5, "section": "tts"},
-    {"key": "ACTIVATION_PHRASE", "label": "Text Filter (phrase to respond to)", "type": "text", "section": "general", "note": "Empty = respond to everything"},
     {"key": "VISION_TRIGGER_PHRASE", "label": "Screen Capture Phrase", "type": "text", "section": "vision"},
     {"key": "VISION_CAPTURE_WINDOW", "label": "Window to Capture", "type": "dropdown", "options_key": "windows", "section": "vision"},
+    {"key": "ACTIVATION_PHRASE", "label": "Text Filter (phrase to respond to)", "type": "text", "section": "general", "note": "Empty = respond to everything"},
+    {"key": "WAKE_KEYWORD", "label": "Wake Word (Vosk)", "type": "text", "section": "general", "note": "Empty = energy VAD fallback"},
     {"key": "SYSTEM_PROMPT", "label": "Personality Prompt", "type": "textarea", "section": "general"},
 ]
 
