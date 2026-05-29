@@ -37,8 +37,9 @@ from config import (
     STT_CAPTURE_MODE,
     TTS_OUTPUT_DEVICE_UUID,
     TTS_PITCH,
+    WAKE_KEYWORD,
 )
-from stt import AzureSTT
+from stt import AzureSTT, WakeWordSTT, latency_mark, reset_latency
 from llm_client import LLMClient
 from tts import AzureTTS
 from vrchat_osc import ChatBox
@@ -55,15 +56,27 @@ class NeuroClone:
         self.is_speaking = False    # TTS playing
         self.is_streaming = False   # VRChat chatbox streaming active
 
-        # Components
-        self.stt = AzureSTT(
-            subscription_key=AZURE_SPEECH_KEY,
-            region=AZURE_SPEECH_REGION,
-            device_index=AUDIO_DEVICE_INDEX,
-            silence_threshold=STT_SILENCE_THRESHOLD,
-            silence_cutoff_sec=STT_SILENCE_CUTOFF_SEC,
-            capture_mode=STT_CAPTURE_MODE,
-        )
+        # Components — STT
+        if WAKE_KEYWORD:
+            self.stt = WakeWordSTT(
+                subscription_key=AZURE_SPEECH_KEY,
+                region=AZURE_SPEECH_REGION,
+                device_index=AUDIO_DEVICE_INDEX,
+                wake_keyword=WAKE_KEYWORD,
+                silence_threshold=STT_SILENCE_THRESHOLD,
+                silence_cutoff_sec=STT_SILENCE_CUTOFF_SEC,
+            )
+            print("[WAKE] Wake word STT enabled — keyword: '{}'".format(WAKE_KEYWORD))
+        else:
+            self.stt = AzureSTT(
+                subscription_key=AZURE_SPEECH_KEY,
+                region=AZURE_SPEECH_REGION,
+                device_index=AUDIO_DEVICE_INDEX,
+                silence_threshold=STT_SILENCE_THRESHOLD,
+                silence_cutoff_sec=STT_SILENCE_CUTOFF_SEC,
+                capture_mode=STT_CAPTURE_MODE,
+            )
+            print("[WAKE] Wake word disabled — using legacy STT (mode: {})".format(STT_CAPTURE_MODE))
         self.stt.on_status = self._on_stt_status
 
         self.llm = LLMClient(
@@ -83,16 +96,21 @@ class NeuroClone:
             pitch=TTS_PITCH,
         )
         self.tts.on_status = self._on_tts_status
-        self.tts.on_speaking_start = lambda: (
-            setattr(self, "is_speaking", True)
-            or self.stt.pause()
-            or self._broadcast_status()
-        )
-        self.tts.on_speaking_end = lambda: (
-            setattr(self, "is_speaking", False)
-            or self.stt.resume()
-            or self._broadcast_status()
-        )
+        def _on_speaking_start():
+            latency_mark("TTS start")
+            self.is_speaking = True
+            self.stt.pause()
+            self._broadcast_status()
+
+        def _on_speaking_end():
+            latency_mark("TTS end")
+            self.is_speaking = False
+            self.stt.resume()
+            reset_latency()  # ready for next interaction
+            self._broadcast_status()
+
+        self.tts.on_speaking_start = _on_speaking_start
+        self.tts.on_speaking_end = _on_speaking_end
 
         self.chatbox = ChatBox(ip=VRC_CHATBOX_IP, port=VRC_CHATBOX_PORT)
 
@@ -244,6 +262,7 @@ class NeuroClone:
         """STT callback: received transcribed speech."""
         if not self.enabled:
             return
+        latency_mark("text received")
         if self.ptt_active or True:  # always process when enabled; PTT gates STT start/stop
             self._process_input(text)
 
@@ -251,6 +270,8 @@ class NeuroClone:
         """Full pipeline: input -> LLM -> TTS -> VRChat."""
         if self.is_processing or self.is_speaking or self.is_streaming:
             return  # debounce
+
+        latency_mark("pipeline start")
 
         self.is_processing = True
         self._log("user", text)
@@ -280,6 +301,8 @@ class NeuroClone:
             except Exception as e:
                 reply = ""
                 self._log("system", f"LLM error: {e}")
+
+        latency_mark("LLM done")
 
         self.is_processing = False
         self._broadcast_status()

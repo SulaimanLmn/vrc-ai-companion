@@ -53,3 +53,8 @@ TTS_PITCH = int(os.getenv("TTS_PITCH", "0"))
 # Device UUID for TTS output (empty = default speaker)
 # Obtain via: python resolve_devices.py <pyaudio_index>
 TTS_OUTPUT_DEVICE_UUID = os.getenv("TTS_OUTPUT_DEVICE_UUID", "")
+
+# Wake word (Vosk — 100% offline, no signup needed)
+# Set WAKE_KEYWORD to a phrase like "computer", "hey neuro", etc.
+# Empty = wake word disabled (uses legacy AzureSTT or energy-VAD)
+WAKE_KEYWORD = os.getenv("WAKE_KEYWORD", "computer")

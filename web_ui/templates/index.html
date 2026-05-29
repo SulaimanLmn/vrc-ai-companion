@@ -507,6 +507,84 @@
       padding: 2px 6px;
       color: var(--text2);
     }
+
+    /* ── Settings Panel ── */
+    .hdr-gear {
+      background: none; border: 1px solid var(--border2); border-radius: 8px;
+      color: var(--text3); padding: 4px 10px; cursor: pointer; font-size: 16px;
+      transition: all .15s;
+    }
+    .hdr-gear:hover { border-color: var(--purple); color: var(--text); }
+
+    .set-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      z-index: 200;
+    }
+    .set-overlay.open { display: block; }
+
+    .set-panel {
+      position: fixed; top: 0; right: -500px; width: 460px; height: 100%;
+      background: var(--surface); border-left: 1px solid var(--border2);
+      z-index: 201; transition: right .3s ease;
+      display: flex; flex-direction: column;
+    }
+    .set-panel.open { right: 0; }
+
+    .set-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 20px 20px 0; flex-shrink: 0;
+    }
+    .set-head h2 { font-size: 16px; font-weight: 600; }
+    .set-head button {
+      background: none; border: none; color: var(--text3); font-size: 20px;
+      cursor: pointer; padding: 0 4px;
+    }
+    .set-head button:hover { color: var(--text); }
+
+    .set-scroll { flex: 1; overflow-y: auto; padding: 16px 20px; }
+
+    .set-group { margin-bottom: 24px; }
+    .set-group h3 {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+      color: var(--text3); margin-bottom: 12px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .set-field { margin-bottom: 16px; }
+    .set-field label { display: block; font-size: 13px; margin-bottom: 4px; }
+    .set-field .hint { font-size: 11px; color: var(--text3); margin-bottom: 6px; }
+
+    .set-field select, .set-field input[type="text"], .set-field textarea {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border2);
+      border-radius: 8px; background: var(--surface2); color: var(--text);
+      font-size: 13px; outline: none; font-family: inherit;
+    }
+    .set-field select:focus, .set-field input:focus, .set-field textarea:focus {
+      border-color: var(--purple);
+    }
+    .set-field textarea { min-height: 80px; resize: vertical; }
+
+    .set-field input[type="range"] {
+      width: 100%; -webkit-appearance: none; appearance: none;
+      height: 6px; background: var(--surface3); border-radius: 3px;
+      outline: none; margin: 8px 0; padding: 0; border: none;
+    }
+    .set-field input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 16px; height: 16px;
+      border-radius: 50%; background: var(--purple); cursor: pointer;
+    }
+    .range-row { display: flex; align-items: center; gap: 12px; }
+    .range-row input[type="range"] { flex: 1; }
+    .range-val { min-width: 40px; text-align: right; font-size: 13px; color: var(--purple); font-weight: 600; }
+
+    .set-bar {
+      border-top: 1px solid var(--border); padding: 12px 20px;
+      display: flex; gap: 8px; align-items: center; flex-shrink: 0;
+      background: var(--surface);
+    }
+    .set-bar .savemsg { font-size: 12px; flex: 1; text-align: right; }
+    .set-bar .savemsg.ok { color: var(--green); }
+    .set-bar .savemsg.err { color: var(--red); }
+    .set-bar .savemsg.warn { color: var(--amber); }
   </style>
 </head>
 
@@ -521,7 +599,9 @@
           <div class="hdr-desc">Speech · LLM · TTS · OSC</div>
         </div>
       </div>
-      <div class="hdr-badge">v1.0.0</div>
+      <div class="hdr-badge">
+        <button class="hdr-gear" onclick="toggleSettings()" title="Settings">⚙</button>
+      </div>
     </div>
 
     <div class="state-bar">
@@ -601,6 +681,137 @@
       } else {
         btnPTT.classList.remove('active');
         btnPTT.textContent = 'Push to talk';
+      }
+    }
+
+    // ── Settings Panel ──
+    let configData = null;
+
+    function toggleSettings() {
+      const p = document.getElementById('setPanel');
+      const o = document.getElementById('setOverlay');
+      const open = !p.classList.contains('open');
+      p.classList.toggle('open'); o.classList.toggle('open');
+      if (open) loadSettings();
+    }
+
+    async function loadSettings() {
+      const c = document.getElementById('setContent');
+      c.innerHTML = 'Loading...';
+      try {
+        const r = await fetch('/api/config');
+        configData = await r.json();
+        renderSettings();
+      } catch (e) {
+        c.innerHTML = '<span style="color:var(--red)">Failed to load settings.</span>';
+      }
+    }
+
+    function renderSettings() {
+      const d = configData, s = d.settings;
+      const inputOpts = [{ value: '', label: 'Default' }];
+      (d.input_devices || []).forEach(dev =>
+        inputOpts.push({ value: String(dev.index), label: dev.name })
+      );
+      const windowOpts = [{ value: '', label: 'Whole screen' }];
+      (d.windows || []).forEach(w =>
+        windowOpts.push({ value: w, label: w })
+      );
+      const staticOpts = {
+        'STT_CAPTURE_MODE': ['loopback', 'microphone'].map(v => ({ value: v, label: v })),
+        'OPENCODE_GO_MODEL': ['mimo-v2.5', 'mimo-v2.5-pro', 'deepseek-v4-flash', 'deepseek-v4-pro',
+          'qwen3.5-plus', 'qwen3.6-plus', 'glm-5.1', 'glm-5', 'kimi-k2.6', 'minimax-m2.5', 'minimax-m2.7'
+        ].map(v => ({ value: v, label: v })),
+      };
+
+      function val(key, def) {
+        const v = s[key]; return v !== undefined && v !== null ? v : def;
+      }
+
+      let html = '', lastSec = '';
+      const secTitles = { audio: 'Audio', stt: 'Voice Detection', llm: 'AI Model', tts: 'Voice', vision: 'Screen Capture', general: 'General' };
+
+      d.ui.forEach(f => {
+        if (f.section !== lastSec) {
+          if (lastSec) html += '</div>';
+          lastSec = f.section;
+          html += '<div class="set-group"><h3>' + (secTitles[f.section] || f.section) + '</h3>';
+        }
+        const id = 'cfg_' + f.key;
+        const cur = val(f.key, '');
+
+        html += '<div class="set-field"><label for="' + id + '">' + escH(f.label) + '</label>';
+        if (f.note) html += '<div class="hint">' + escH(f.note) + '</div>';
+
+        if (f.type === 'dropdown') {
+          let opts;
+          if (f.options_key === 'input_devices') opts = inputOpts;
+          else if (f.options_key === 'windows') opts = windowOpts;
+          else opts = (f.options || []).map(v => ({ value: v, label: v }));
+          html += '<select id="' + id + '">';
+          let found = false;
+          opts.forEach(o => {
+            const sel = (o.value === cur || o.value === String(cur)) ? 'selected' : '';
+            if (sel) found = true;
+            html += '<option value="' + escA(o.value) + '" ' + sel + '>' + escH(o.label) + '</option>';
+          });
+          if (!found && cur) html += '<option value="' + escA(cur) + '" selected>' + escH(cur) + '</option>';
+          html += '</select>';
+        } else if (f.type === 'range') {
+          const def = val(f.key, f.min);
+          html += '<div class="range-row">';
+          html += '<input type="range" id="' + id + '" min="' + f.min + '" max="' + f.max + '" step="' + f.step + '" value="' + def + '" oninput="rUp(this)">';
+          html += '<span class="range-val" id="' + id + '_v">' + def + '</span>';
+          html += '</div>';
+        } else if (f.type === 'textarea') {
+          html += '<textarea id="' + id + '">' + escH(cur.replace(/\\n/g, '\n')) + '</textarea>';
+        } else {
+          html += '<input type="text" id="' + id + '" value="' + escA(cur) + '">';
+        }
+        html += '</div>';
+      });
+      if (lastSec) html += '</div>';
+      document.getElementById('setContent').innerHTML = html;
+      document.getElementById('setMsg').textContent = '';
+    }
+
+    function rUp(el) {
+      document.getElementById(el.id + '_v').textContent = el.value;
+    }
+
+    function escH(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function escA(t) { return escH(t).replace(/"/g, '&quot;'); }
+
+    async function saveSettings() {
+      const msg = document.getElementById('setMsg');
+      msg.textContent = 'Saving...'; msg.className = 'savemsg';
+      const payload = {};
+      configData.ui.forEach(f => {
+        const el = document.getElementById('cfg_' + f.key);
+        if (!el) return;
+        let v = el.value;
+        if (f.type === 'textarea') v = v.replace(/\n/g, '\\n');
+        payload[f.key] = v;
+      });
+      try {
+        const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const d = await r.json();
+        if (d.ok) {
+          if (d.needs_restart && d.needs_restart.length) {
+            msg.textContent = 'Saved! Restart needed: ' + d.needs_restart.join(', ');
+            msg.className = 'savemsg warn';
+          } else {
+            msg.textContent = 'Saved!';
+            msg.className = 'savemsg ok';
+          }
+        } else {
+          msg.textContent = d.error || 'Save failed';
+          msg.className = 'savemsg err';
+        }
+        setTimeout(() => { if (msg.textContent.startsWith('Saved')) msg.textContent = ''; }, 3000);
+      } catch (e) {
+        msg.textContent = 'Failed to save';
+        msg.className = 'savemsg err';
       }
     }
 
@@ -714,6 +925,20 @@
       }
     });
   </script>
+  <!-- Settings -->
+  <div class="set-overlay" id="setOverlay" onclick="toggleSettings()"></div>
+  <div class="set-panel" id="setPanel">
+    <div class="set-head">
+      <h2>Settings</h2>
+      <button onclick="toggleSettings()">✕</button>
+    </div>
+    <div class="set-scroll" id="setContent">Loading...</div>
+    <div class="set-bar">
+      <button class="primary" onclick="saveSettings()">Save</button>
+      <div class="savemsg" id="setMsg"></div>
+    </div>
+  </div>
+
 </body>
 
 </html>

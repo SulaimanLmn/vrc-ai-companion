@@ -8,4 +8,8 @@ dist/
 build/
 .web_cache/
 vision-image/
+vosk_models/
+nul
+*.wav
+*.zip
 
