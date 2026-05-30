@@ -12,3 +12,4 @@ mss>=9.0.0
 pywin32>=305
 Pillow>=10.0.0
 vosk>=0.3.45
+openwakeword>=0.6.0

@@ -174,7 +174,9 @@ CONFIG_UI = [
     {"key": "LLM_MAX_TOKENS", "label": "Response Length (tokens)", "type": "range", "min": 50, "max": 5000, "step": 50, "section": "llm"},
     {"key": "LLM_MAX_HISTORY", "label": "Conversation Memory (exchanges)", "type": "range", "min": 0, "max": 50, "step": 1, "section": "llm", "note": "0 = unlimited"},
     {"key": "AUDIO_DEVICE_INDEX", "label": "Microphone / Audio Input", "type": "dropdown", "options_key": "input_devices", "section": "audio"},
-    {"key": "STT_CAPTURE_MODE", "label": "Capture Mode", "type": "dropdown", "options": ["loopback", "microphone"], "section": "audio"},
+    {"key": "STT_CAPTURE_MODE", "label": "Capture Mode", "type": "dropdown", "section": "audio", "options": [
+        "loopback", {"value": "microphone", "hint": "recommended"}
+    ]},
     {"key": "STT_SILENCE_THRESHOLD", "label": "Mic Sensitivity", "type": "range", "min": 100, "max": 2000, "step": 50, "section": "stt"},
     {"key": "STT_SILENCE_CUTOFF_SEC", "label": "Silence Wait (seconds)", "type": "range", "min": 0.5, "max": 5.0, "step": 0.25, "section": "stt"},
     {"key": "AZURE_SPEECH_KEY", "label": "Azure Speech Key", "type": "password", "section": "stt"},
@@ -191,7 +193,9 @@ CONFIG_UI = [
     {"key": "TTS_PITCH", "label": "Voice Pitch (%)", "type": "range", "min": -50, "max": 50, "step": 5, "section": "tts"},
     {"key": "VISION_TRIGGER_PHRASE", "label": "Screen Capture Phrase", "type": "text", "section": "vision"},
     {"key": "VISION_CAPTURE_WINDOW", "label": "Window to Capture", "type": "dropdown", "options_key": "windows", "section": "vision"},
-    {"key": "USE_WAKE_WORD", "label": "Wake Word Detection", "type": "dropdown", "options": ["vosk", "vad", "openwakeword"], "section": "general", "note": "vosk = Vosk keyphrase, vad = energy VAD + text filter, openwakeword = requires model"},
+    {"key": "USE_WAKE_WORD", "label": "Wake Word Detection", "type": "dropdown", "section": "general", "note": "vosk = Vosk keyphrase, vad = energy VAD + text filter, openwakeword = requires model", "options": [
+        "vosk", "vad", {"value": "openwakeword", "hint": "recommended"}
+    ]},
     {"key": "WAKE_KEYWORD", "label": "Trigger Phrase", "type": "text", "section": "general", "note": "Used by Vosk keyphrase or VAD text filter", "show_when": "vosk,vad"},
     {"key": "OWW_MODEL", "label": "openWakeWord Model", "type": "dropdown", "options_key": "oww_models", "section": "general", "note": "Model to use for wake word detection", "show_when": "openwakeword"},
     {"key": "SYSTEM_PROMPT", "label": "Personality Prompt", "type": "textarea", "section": "general"},
