@@ -1368,7 +1368,7 @@
             + '</button>'
             + '</div>';
         } else if (f.type === 'dropdown') {
-          let opts; if (f.options_key === 'input_devices') opts = inputOpts; else if (f.options_key === 'windows') opts = windowOpts; else if (f.options_key === 'oww_models') opts = owwOpts; else opts = (f.options || []).map(v => ({ value: v, label: v }));
+          let opts; if (f.options_key === 'input_devices') opts = inputOpts; else if (f.options_key === 'windows') opts = windowOpts; else if (f.options_key === 'oww_models') opts = owwOpts; else opts = (f.options || []).map(v => typeof v === 'object' ? { value: v.value, label: (v.label || v.value) + (v.hint ? ' (' + v.hint + ')' : '') } : { value: v, label: v });
           if (f.options_key === 'windows' || f.options_key === 'input_devices') {
             html += '<div style="display:flex;gap:6px;">'
               + '<select id="' + id + '" style="flex:1;">';

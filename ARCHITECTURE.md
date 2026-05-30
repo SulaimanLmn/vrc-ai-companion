@@ -2,7 +2,7 @@
 
 ## Purpose
 
-An AI voice companion for **VRChat**. Listens via a microphone, detects a wake word locally via Vosk, records the full utterance, transcribes it with Azure STT, generates a response via any OpenAI-compatible LLM, and speaks back through the user's microphone while displaying the text in VRChat's chatbox.
+An AI voice companion for **VRChat**. Listens via a microphone, detects a wake word locally (Vosk keyphrase, energy VAD + text filter, or openWakeWord classifier), records the full utterance, transcribes it with Azure STT, generates a response via any OpenAI-compatible LLM, and speaks back through the user's microphone while displaying the text in VRChat's chatbox.
 
 ## The Flow
 
@@ -18,16 +18,20 @@ Mic / desktop audio
 │  │ stream  │───▶│ (keeps recent audio) │  │
 │  └────┬────┘    └──────────────────────┘  │
 │       │                                    │
-│       ▼   energy gate (skip silence)       │
-│  ┌─────────┐                               │
-│  │  Vosk   │  offline keyphrase spotting   │
-│  │ (16kHz) │  "computer", "hey vox", etc.  │
-│  └────┬────┘                               │
-│       │  keyword detected                  │
+│       ▼   detection (one of three)         │
+│  ┌──────┬───────┬──────────────────┐       │
+│  │ Vosk │  VAD  │ openWakeWord     │       │
+│  │ key- │ energy│ classifier       │       │
+│  │phrase│thresh │ Silero VAD gate  │       │
+│  │+text │ +text │ score > 0.6      │       │
+│  │match │filter │                  │       │
+│  └──────┴───────┴──────────────────┘       │
+│       │  keyword detected                   │
 │       ▼                                    │
 │  ┌──────────────────────────────────┐      │
 │  │ Continue recording → VAD silence │      │
-│  │ → resample → Azure STT           │      │
+│  │ → trim silence → resample →      │      │
+│  │ → Azure STT → strip keyword      │      │
 │  │ → callback(text)                 │      │
 │  └──────────────────────────────────┘      │
 └────────────────────┬──────────────────────┘
@@ -38,7 +42,7 @@ Mic / desktop audio
 │     • Sends text + history + system prompt │
 │     • Blocks until full response received  │
 │     • OpenAI-compatible API                │
-│     • Also supports streaming + vision     │
+│     • Also supports vision                 │
 └────────────────────┬──────────────────────┘
                      │  AI response text
                      ▼
@@ -58,7 +62,7 @@ Mic / desktop audio
 ## State Machine
 
 ```
-OFF ──[Enable]──► ON (Vosk listening for keyword)
+OFF ──[Enable]──► ON (listening for wake word)
                       │
                       │  wake word detected
                       ▼
@@ -75,7 +79,7 @@ OFF ──[Enable]──► ON (Vosk listening for keyword)
                       ▼
                 SPEAKING (TTS playing + OSC streaming)
                       │
-                      │  TTS done
+                      │  TTS done → 3s cooldown → reset model state
                       ▼
                   ON (back to listening)
 ```
@@ -86,10 +90,15 @@ OFF ──[Enable]──► ON (Vosk listening for keyword)
 
 - Single PyAudio stream at device's native sample rate
 - Ring buffer keeps ~1.5s of recent audio
-- Vosk processes 16kHz-resampled frames (energy gate: silent frames skipped)
-- On keyword match: prepend ring buffer, continue recording with VAD, trim silence, resample to 16kHz, send to Azure STT
-- Vosk state reset after each cycle + 3s cooldown prevents re-trigger
-- Falls back to energy-VAD (amplitude threshold) when Vosk is unavailable
+- Three detection modes (set via `USE_WAKE_WORD`):
+  - **vosk**: Vosk ASR checks partial text for keyword match (energy gate prevents silence processing)
+  - **vad**: Amplitude threshold triggers recording, text filter checks for keyword after Azure STT
+  - **openwakeword**: ONNX/TFLite classifier scores audio frames at 160ms intervals, Silero VAD (threshold 0.5) gates false positives, score > 0.6 triggers recording
+- On any trigger: prepend ring buffer, continue recording with VAD, trim trailing silence, resample to 16kHz, send to Azure STT
+- Keyword stripped from transcribed text: Vosk uses `WAKE_KEYWORD`, openWakeWord uses model filename (e.g. "Amelia")
+- Vosk state and openWakeWord prediction buffer reset after each cycle + 3s cooldown prevents re-trigger
+- 3s post-resume cooldown prevents TTS echo from triggering detection
+- Falls back to energy-VAD when selected mode is unavailable
 
 ### `llm_client.py` — LLM Client
 
@@ -122,7 +131,7 @@ OFF ──[Enable]──► ON (Vosk listening for keyword)
 - Tests: dedicated test cards for LLM, STT, TTS, and wake word
 - Debug: live console output streamed from the backend
 - Top bar: status dot + state tag, live mic level meter, enable toggle
-- Settings panel: slide-out from right with live device dropdowns, sliders, text areas, password fields with eye toggle
+- Settings panel: slide-out from right with live device dropdowns, sliders, text areas, password fields; Wake Word Detection has three modes, model selector appears when openWakeWord is selected
 - Keyboard shortcuts: Space (PTT), E (toggle), ? (help)
 - Toast notifications for save confirmations and test results
 
@@ -135,7 +144,9 @@ OFF ──[Enable]──► ON (Vosk listening for keyword)
 | `LLM_API_KEY` | — | LLM API key |
 | `LLM_BASE_URL` | `https://opencode.ai/zen/go/v1` | LLM endpoint |
 | `LLM_MODEL` | `mimo-v2.5` | LLM model |
-| `WAKE_KEYWORD` | `computer` | Vosk wake word (empty = VAD fallback) |
+| `WAKE_KEYWORD` | `computer` | Trigger phrase (Vosk keyphrase / VAD text filter) |
+| `USE_WAKE_WORD` | `vosk` | Detection mode: `vosk`, `vad`, or `openwakeword` |
+| `OWW_MODEL` | `""` | openWakeWord model name (e.g. `Amelia`) |
 | `AUDIO_DEVICE_INDEX` | `-1` | PyAudio input device index |
 | `STT_SILENCE_THRESHOLD` | `500` | Amplitude threshold |
 | `STT_SILENCE_CUTOFF_SEC` | `2.0` | Silence wait before transcribing |
@@ -149,9 +160,9 @@ OFF ──[Enable]──► ON (Vosk listening for keyword)
 
 ## Key Design Decisions
 
-- **Vosk over Porcupine**: 100% open-source, no API key or signup required, runs entirely offline
-- **Energy gate**: Silent frames are never fed to Vosk — prevents keyword hallucination in noise floor
-- **Vosk reset on resume**: Clears recognition state after TTS pause so stale context doesn't trigger
+- **Three wake word modes** — Vosk (any phrase, no training), VAD (simple energy gate + text filter), openWakeWord (classifier + VAD gate, requires model)
+- **openWakeWord model reset** — `model.reset()` clears the prediction buffer after each cycle so TTS echo doesn't accumulate across interactions
+- **Silero VAD gate** — Built-in voice activity detector (threshold 0.5) prevents wake word detection on non-speech noise
 - **Word-boundary keyword matching**: `\bphrase\b` regex, not substring — prevents accidental partial matches
 - **Single persistent TTS synthesizer**: Destroying/recreating Azure SDK synthesizer corrupts WASAPI audio driver
 - **WASAPI UUID for TTS**: Azure SDK ignores friendly device names; must use `{0.0.0.00000000}.{...}` format

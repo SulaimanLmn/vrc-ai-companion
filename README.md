@@ -1,6 +1,6 @@
 # Companion
 
-Real-time AI voice companion for VRChat with offline wake word, speech recognition, and text-to-speech.
+Real-time AI voice companion for VRChat with local wake word detection, speech recognition, and text-to-speech.
 
 ## Architecture
 
@@ -8,19 +8,22 @@ Real-time AI voice companion for VRChat with offline wake word, speech recogniti
 Mic audio (user's PC / loopback)
         │
         ▼
-  ┌─────────────────┐
-  │  Vosk (offline) │  ← local wake word detection, no signup
-  │  keyphrase      │      (e.g., "computer", "hey vox")
-  │  spotting       │
-  └────────┬────────┘
-           │  wake word detected
-           ▼
-  ┌─────────────────┐
-  │  Record → VAD   │  ← captures full utterance until silence
-  │  → Azure STT    │      (ring buffer prepends wake word audio)
-  └────────┬────────┘
-           │  transcribed text
-           ▼
+  ┌──────────────────────────────┐
+  │  Wake word detection          │
+  │  ┌──────┬──────┬──────────┐  │
+  │  │ Vosk │ VAD  │ openWake │  │
+  │  │ (any │(text│ Word     │  │
+  │  │phrase│filter)│(model)  │  │
+  │  └──────┴──────┴──────────┘  │
+  └──────────────┬───────────────┘
+                 │  wake word detected
+                 ▼
+  ┌──────────────────────────────┐
+  │  Record → VAD → Azure STT    │
+  │  (ring buffer prepends audio)│
+  └──────────────┬───────────────┘
+                 │  transcribed text
+                 ▼
   ┌─────────────────┐     ┌──────────────────┐
   │  LLM (OpenAI-   │────▶│  Azure TTS       │
   │  compatible)    │     │  → speaker output│
@@ -41,7 +44,8 @@ Mic audio (user's PC / loopback)
 
 ```bash
 pip install -r requirements.txt
-pip install vosk    # offline wake word (~40 MB model auto-downloads)
+pip install vosk            # for Vosk mode (~40 MB auto-downloads)
+pip install openwakeword    # for openWakeWord mode (optional, requires model)
 ```
 
 You'll also need:
@@ -60,7 +64,8 @@ cp .env.example .env
 Edit `.env` with your:
 - Azure Speech key & region (for STT + TTS)
 - LLM API key, base URL, and model (any OpenAI-compatible API)
-- `WAKE_KEYWORD` — the wake word phrase (e.g., `computer`, `hey vox`)
+- `WAKE_KEYWORD` — trigger phrase (used by Vosk keyphrase or VAD text filter)
+- `USE_WAKE_WORD` — detection mode: `vosk`, `vad`, or `openwakeword`
 - VRChat OSC settings
 - Audio device indices (run `python main.py --list-devices`)
 
@@ -88,13 +93,17 @@ Open `http://localhost:5000` in your browser.
 
 ---
 
-## Wake Word
+## Wake Word Detection
 
-The system uses **Vosk** for offline wake word detection — no API key, no signup, 100% private.
+Three modes available:
 
-By default, it listens for `"computer"`. Set `WAKE_KEYWORD` in `.env` to any phrase you want (single or multi-word). The wake word gates recording: Azure STT is only called when the keyword is detected, saving API costs and reducing latency.
+| Mode | `USE_WAKE_WORD` | How it works | Required |
+|------|-----------------|-------------|----------|
+| **Vosk** | `vosk` | Keyphrase spotting via Vosk ASR — detects any phrase, no extra model needed | `pip install vosk` (model auto-downloads) |
+| **VAD + text filter** | `vad` | Energy amplitude triggers recording, then Azure transcribes — only passes text containing `WAKE_KEYWORD` | Nothing extra |
+| **openWakeWord** (recommended) | `openwakeword` | Classifier model scores audio frames, Silero VAD gates false positives | `pip install openwakeword` + your `.onnx`/`.tflite` model in `models/openwakeword/` |
 
-If `WAKE_KEYWORD` is empty, the system falls back to energy-based VAD (any loud sound triggers recording).
+Set `USE_WAKE_WORD` in settings or `.env`. Changes require restart.
 
 ---
 
@@ -102,10 +111,11 @@ If `WAKE_KEYWORD` is empty, the system falls back to energy-based VAD (any loud 
 
 ### STT (Speech-to-Text) — what the AI hears
 
-The AI listens through a PyAudio stream. Two paths:
+The AI listens through a PyAudio stream. Three paths depending on the mode:
 
-- **Wake word mode** (default): Vosk detects keyword locally → records utterance → sends one Azure STT call
-- **Energy VAD fallback**: amplitude threshold triggers recording (used when Vosk model is unavailable)
+- **Vosk**: detects keyword locally via Vosk → records utterance → sends one Azure STT call
+- **VAD**: amplitude threshold triggers recording → Azure STT → text filter checks for `WAKE_KEYWORD`
+- **openWakeWord**: classifier scores audio frames → triggers on high score → records → Azure STT
 
 ```bash
 # List available input devices to find your index
@@ -165,7 +175,7 @@ The web UI (`http://localhost:5000`) has a sidebar with three main pages:
 
 The top bar shows a **status dot** (green = on, red = off) with a **state tag** (ON / LISTENING / THINKING / SPEAKING), a **live mic level meter**, and the Enable/Disable toggle.
 
-**Settings** opens as a slide-out panel from the right. Changes that require a restart show a warning in the save notification.
+**Settings** opens as a slide-out panel from the right. The Wake Word Detection dropdown offers three modes; in openWakeWord mode, a model selector appears instead of the trigger phrase text field. Changes that require a restart show a warning in the save notification.
 
 ---
 
@@ -174,7 +184,7 @@ The top bar shows a **status dot** (green = on, red = off) with a **state tag** 
 | File | Purpose |
 |------|---------|
 | `main.py` | Main orchestrator (`Companion` class) + entry point |
-| `stt.py` | `WakeWordSTT` (Vosk + PyAudio + Azure) and legacy `AzureSTT` |
+| `stt.py` | `WakeWordSTT` (Vosk / VAD / openWakeWord + PyAudio + Azure) and legacy `AzureSTT` |
 | `llm_client.py` | LLM client (OpenAI-compatible API) |
 | `tts.py` | Azure TTS with queuing and WASAPI UUID routing |
 | `vrchat_osc.py` | VRChat OSC ChatBox integration |
@@ -204,7 +214,9 @@ The top bar shows a **status dot** (green = on, red = off) with a **state tag** 
 | `SYSTEM_PROMPT` | — | AI personality prompt |
 | `WEB_HOST` | `0.0.0.0` | Web UI host |
 | `WEB_PORT` | `5000` | Web UI port |
-| `WAKE_KEYWORD` | `computer` | Vosk wake word phrase (empty = disabled) |
+| `WAKE_KEYWORD` | `computer` | Trigger phrase (Vosk keyphrase / VAD text filter) |
+| `USE_WAKE_WORD` | `vosk` | Detection mode: `vosk`, `vad`, or `openwakeword` |
+| `OWW_MODEL` | `""` | openWakeWord model name (e.g. `Amelia` for `Amelia.onnx`) |
 | `VISION_TRIGGER_PHRASE` | `look at this` | Phrase to trigger screen capture |
 | `VISION_CAPTURE_WINDOW` | `VRChat` | Window title to capture for vision |
 | `LLM_MAX_TOKENS` | `150` | Max response tokens |
@@ -221,8 +233,9 @@ The top bar shows a **status dot** (green = on, red = off) with a **state tag** 
 ## Troubleshooting
 
 - **LLM not responding**: Check your API key and base URL in settings
-- **Wake word not detected**: Run `pip install vosk` — model auto-downloads on first run
-- **False wake triggers**: Increase `STT_SILENCE_THRESHOLD` or use a less common keyword
+- **Wake word not detected (Vosk)**: Run `pip install vosk` — model auto-downloads on first run
+- **Wake word not detected (openWakeWord)**: Place your `.onnx` or `.tflite` file in `models/openwakeword/` and select it in settings
+- **False wake triggers**: Increase `STT_SILENCE_THRESHOLD` or switch to a different detection mode
 - **STT not picking up speech**: Lower `STT_SILENCE_THRESHOLD` (try 200-300)
 - **TTS not heard in VRChat**: Set `TTS_OUTPUT_DEVICE_UUID` to a virtual cable device UUID
 - **ChatBox not showing**: Verify OSC is enabled in VRChat Settings (port 9000)
