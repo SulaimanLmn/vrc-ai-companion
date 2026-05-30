@@ -1307,6 +1307,7 @@
       (d.input_devices || []).forEach(dev => inputOpts.push({ value: String(dev.index), label: dev.name }));
       const windowOpts = [{ value: '', label: 'Whole screen' }];
       (d.windows || []).forEach(w => windowOpts.push({ value: w, label: w }));
+      const owwOpts = (d.oww_models || []).map(m => ({ value: m.name, label: m.name + ' (' + m.file + ')' }));
       const staticOpts = {
         'STT_CAPTURE_MODE': ['loopback', 'microphone'].map(v => ({ value: v, label: v })),
         'LLM_MODEL': ['mimo-v2.5', 'mimo-v2.5-pro', 'deepseek-v4-flash', 'deepseek-v4-pro', 'qwen3.5-plus', 'qwen3.6-plus', 'glm-5.1', 'glm-5', 'kimi-k2.6', 'minimax-m2.5', 'minimax-m2.7'].map(v => ({ value: v, label: v })),
@@ -1318,8 +1319,13 @@
       const OCG_MODELS = ['mimo-v2.5', 'mimo-v2.5-pro', 'deepseek-v4-flash', 'deepseek-v4-pro',
         'qwen3.5-plus', 'qwen3.6-plus', 'glm-5.1', 'glm-5', 'kimi-k2.6', 'minimax-m2.5', 'minimax-m2.7'];
       const isOcgMode = (s.LLM_BASE_URL || '') === OPENCODE_DEFAULT;
+      const wakeMode = s.USE_WAKE_WORD || 'vosk';
 
       d.ui.forEach(f => {
+        // Skip fields with show_when that don't match current wake mode
+        if (f.show_when && f.show_when.split(',').indexOf(wakeMode) === -1) {
+          return;
+        }
         if (f.section !== lastSec) {
           if (lastSec) html += '</div>';
           lastSec = f.section;
@@ -1362,7 +1368,7 @@
             + '</button>'
             + '</div>';
         } else if (f.type === 'dropdown') {
-          let opts; if (f.options_key === 'input_devices') opts = inputOpts; else if (f.options_key === 'windows') opts = windowOpts; else opts = (f.options || []).map(v => ({ value: v, label: v }));
+          let opts; if (f.options_key === 'input_devices') opts = inputOpts; else if (f.options_key === 'windows') opts = windowOpts; else if (f.options_key === 'oww_models') opts = owwOpts; else opts = (f.options || []).map(v => ({ value: v, label: v }));
           if (f.options_key === 'windows' || f.options_key === 'input_devices') {
             html += '<div style="display:flex;gap:6px;">'
               + '<select id="' + id + '" style="flex:1;">';

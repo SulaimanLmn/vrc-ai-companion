@@ -600,6 +600,8 @@ class WakeWordSTT:
         region: str,
         device_index: int = -1,
         wake_keyword: str = "computer",
+        wake_mode: str = "vosk",
+        oww_model: str = "",
         silence_threshold: int = 500,
         silence_cutoff_sec: float = 2.0,
     ):
@@ -607,6 +609,8 @@ class WakeWordSTT:
         self.region = region
         self.device_index = device_index if device_index >= 0 else None
         self.wake_keyword = wake_keyword
+        self.wake_mode = wake_mode
+        self.oww_model_name = oww_model  # selected openWakeWord model name
         self.silence_threshold = silence_threshold
         self.silence_cutoff_sec = silence_cutoff_sec
 
@@ -616,9 +620,13 @@ class WakeWordSTT:
         self._pa = None
         self._stream = None
         self._vosk_recognizer = None
+        self._oww_model = None  # openWakeWord model
+        self._oww_keywords = []  # keywords extracted from model filenames
+        self._oww_buffer = b""  # 16kHz audio buffer for openWakeWord
         self._sample_rate = 16000
         self._dev_index = -1
-        self._use_wake_word = bool(wake_keyword)
+        self._use_wake_word = wake_keyword and wake_mode == "vosk"
+        self._resume_time = 0.0  # timestamp of last resume — for cooldown after TTS
 
         self.on_text = None       # callback(text)
         self.on_status = None     # callback(msg)
@@ -642,10 +650,14 @@ class WakeWordSTT:
     def resume(self):
         """Resume detection after pause."""
         self._paused = False
+        self._resume_time = _time.time()
         # Clear Vosk state so it doesn't trigger on stale context from
         # before the pause (e.g. keyword fragments from the previous utterance).
         if self._vosk_recognizer:
             self._vosk_recognizer.Reset()
+        # Clear openWakeWord internal state so it starts fresh
+        if self._oww_model:
+            self._oww_model.reset()
 
     def stop(self):
         """Stop STT and release resources."""
@@ -717,6 +729,48 @@ class WakeWordSTT:
         else:
             self._status("Wake word disabled — using continuous energy-VAD")
 
+        # ── Initialize openWakeWord (if mode selected) ──
+        if self.wake_mode == "openwakeword":
+            try:
+                import openwakeword as _oww
+                from openwakeword.model import Model as _OWWModel
+                import glob as _glob
+                model_dir = os.path.join(os.path.dirname(__file__), "models", "openwakeword")
+                # Load only the selected model, or all models if none selected
+                if self.oww_model_name:
+                    model_path = os.path.join(model_dir, self.oww_model_name)
+                    # Try with common extensions
+                    for ext in [".onnx", ".tflite"]:
+                        f = model_path + ext
+                        if os.path.exists(f):
+                            model_files = [f]
+                            break
+                    else:
+                        model_files = []
+                        self._status(f"OWW model '{self.oww_model_name}' not found, scanning folder")
+                else:
+                    model_files = []
+                if not model_files:
+                    model_files = _glob.glob(os.path.join(model_dir, "*.tflite")) + \
+                                  _glob.glob(os.path.join(model_dir, "*.onnx"))
+                if model_files:
+                    self._oww_model = _OWWModel(wakeword_models=model_files, vad_threshold=0.5)
+                    # Extract keywords from model filenames (e.g., "Amelia.onnx" → "Amelia")
+                    self._oww_keywords = list(self._oww_model.models.keys())
+                    self._status(f"openWakeWord models: {self._oww_keywords}")
+                else:
+                    self._status("No openWakeWord models found in models/openwakeword/ — fallback to VAD")
+                    self.wake_mode = "vad"
+                    self._use_wake_word = False
+            except ImportError:
+                self._status("openwakeword not installed — fallback to VAD")
+                self.wake_mode = "vad"
+                self._use_wake_word = False
+            except Exception as e:
+                self._status(f"openWakeWord init failed: {e} — fallback to VAD")
+                self.wake_mode = "vad"
+                self._use_wake_word = False
+
         # ── Open PyAudio stream ──
         try:
             self._stream = self._pa.open(
@@ -772,7 +826,10 @@ class WakeWordSTT:
             # ── Detect trigger ──
             triggered = False
 
-            if self._use_wake_word and self._vosk_recognizer:
+            # Post-resume cooldown: don't detect for 1.5s after TTS ends
+            if _time.time() - self._resume_time < 3.0:
+                pass  # skip detection, just accumulate ring buffer
+            elif self._use_wake_word and self._vosk_recognizer:
                 # Energy gate: only feed SILENT frames to Vosk if the model
                 # has received speech recently (keep it primed), otherwise
                 # skip entirely to prevent hallucinating keywords in noise.
@@ -793,6 +850,24 @@ class WakeWordSTT:
                             self._status("Wake word detected!")
                             triggered = True
                 # Silent frames are NOT fed to Vosk — prevents phantom detections
+            elif self.wake_mode == "openwakeword" and self._oww_model:
+                # openWakeWord detection — buffer 16kHz audio to 1280-sample frames
+                pcm_16k = _resample(pcm, sample_rate, 16000)
+                self._oww_buffer += pcm_16k
+                OWW_FRAME = 2560  # 160ms at 16kHz
+                while len(self._oww_buffer) >= OWW_FRAME:
+                    chunk = self._oww_buffer[:OWW_FRAME]
+                    self._oww_buffer = self._oww_buffer[OWW_FRAME:]
+                    chunk_array = np.frombuffer(chunk, dtype=np.int16)
+                    prediction = self._oww_model.predict(chunk_array)
+                    for model_name, score in prediction.items():
+                        if score > 0.6:
+                            latency_mark("WAKE trigger")
+                            self._status(f"Wake word detected ({model_name}: {score:.2f})")
+                            triggered = True
+                            break
+                    if triggered:
+                        break
             else:
                 # Energy-based VAD
                 if amp > self.silence_threshold:
@@ -811,6 +886,9 @@ class WakeWordSTT:
                 # re-detect the keyword in residual / ongoing audio.
                 if self._vosk_recognizer:
                     self._vosk_recognizer.Reset()
+                # Clear openWakeWord internal state (prediction buffer, etc.)
+                if self._oww_model:
+                    self._oww_model.reset()
                 self._status("Listening for wake word..." if self._use_wake_word else "Listening...")
 
         self._cleanup()
@@ -886,11 +964,12 @@ class WakeWordSTT:
             full_audio = full_audio[:trim_end]
 
         # ── Reject if no actual speech in the capture ──
-        # (prevents false-trigger ring buffer residue from being sent to Azure)
-        speech_energy = np.abs(full_audio).mean()
-        if speech_energy < self.silence_threshold * 0.4:
-            self._status(f"False trigger — speech too quiet ({speech_energy:.0f} < {self.silence_threshold * 0.4:.0f})")
-            return
+        # (only needed in VAD mode — Vosk/OWW already validate the trigger)
+        if self.wake_mode == "vad":
+            speech_energy = np.abs(full_audio).mean()
+            if speech_energy < self.silence_threshold * 0.4:
+                self._status(f"False trigger — speech too quiet ({speech_energy:.0f} < {self.silence_threshold * 0.4:.0f})")
+                return
 
         # ── Resample to 16 kHz ──
         TARGET = 16000
@@ -911,13 +990,22 @@ class WakeWordSTT:
             # LLM only sees the actual user request after the trigger.
             cleaned = text.strip()
             if self._use_wake_word and _keyword_in_text(self.wake_keyword, cleaned):
-                # Remove the first occurrence of the wake keyword (word-boundary aware)
+                # Vosk mode: strip the configured keyword
                 pattern = r'\b' + re.escape(self.wake_keyword.lower()) + r'\b'
                 cleaned = re.sub(pattern, '', cleaned.lower(), count=1).strip()
-                # Re-case the first letter since we lowered everything
                 if cleaned:
                     cleaned = cleaned[0].upper() + cleaned[1:]
                 cleaned = cleaned.lstrip(",.;:!? ").strip()
+            elif self.wake_mode == "openwakeword":
+                # openWakeWord mode: strip the detected model keyword
+                for kw in self._oww_keywords:
+                    if _keyword_in_text(kw, cleaned):
+                        pattern = r'\b' + re.escape(kw.lower()) + r'\b'
+                        cleaned = re.sub(pattern, '', cleaned.lower(), count=1).strip()
+                        if cleaned:
+                            cleaned = cleaned[0].upper() + cleaned[1:]
+                        cleaned = cleaned.lstrip(",.;:!? ").strip()
+                        break
             if cleaned:
                 latency_mark("transcribe done")
                 print(f"[STT] ✓ {cleaned}")

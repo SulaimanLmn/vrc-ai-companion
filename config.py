@@ -56,5 +56,21 @@ TTS_OUTPUT_DEVICE_UUID = os.getenv("TTS_OUTPUT_DEVICE_UUID", "")
 
 # Wake word (Vosk — 100% offline, no signup needed)
 # Set WAKE_KEYWORD to a phrase like "computer", "hey neuro", etc.
-# Empty = wake word disabled (uses legacy AzureSTT or energy-VAD)
 WAKE_KEYWORD = os.getenv("WAKE_KEYWORD", "computer")
+# Wake word detection mode
+# "vosk" — Vosk keyphrase spotting (offline, any phrase)
+# "vad" — energy VAD + text filter (no model needed)
+# "openwakeword" — openWakeWord classifier (requires model file)
+# Backward compat: true → vosk, false → vad
+USE_WAKE_WORD_raw = os.getenv("USE_WAKE_WORD", "vosk").lower()
+if USE_WAKE_WORD_raw in ("true", "1", "yes"):
+    USE_WAKE_WORD = "vosk"
+elif USE_WAKE_WORD_raw in ("false", "0", "no", ""):
+    USE_WAKE_WORD = "vad"
+elif USE_WAKE_WORD_raw in ("vosk", "vad", "openwakeword"):
+    USE_WAKE_WORD = USE_WAKE_WORD_raw
+else:
+    USE_WAKE_WORD = "vosk"
+
+# Selected openWakeWord model name (e.g., "Amelia" for Amelia.onnx)
+OWW_MODEL = os.getenv("OWW_MODEL", "")

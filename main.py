@@ -9,6 +9,7 @@ Usage:
 """
 
 import argparse
+import re
 import threading
 import time
 import sys
@@ -38,8 +39,10 @@ from config import (
     TTS_OUTPUT_DEVICE_UUID,
     TTS_PITCH,
     WAKE_KEYWORD,
+    USE_WAKE_WORD,
+    OWW_MODEL,
 )
-from stt import AzureSTT, WakeWordSTT, latency_mark, reset_latency
+from stt import AzureSTT, WakeWordSTT, latency_mark, reset_latency, _keyword_in_text
 from llm_client import LLMClient
 from tts import AzureTTS
 from vrchat_osc import ChatBox
@@ -58,15 +61,18 @@ class Companion:
 
         # Components — STT
         if WAKE_KEYWORD:
+            active_keyword = WAKE_KEYWORD if USE_WAKE_WORD == "vosk" else ""
             self.stt = WakeWordSTT(
                 subscription_key=AZURE_SPEECH_KEY,
                 region=AZURE_SPEECH_REGION,
                 device_index=AUDIO_DEVICE_INDEX,
-                wake_keyword=WAKE_KEYWORD,
+                wake_keyword=active_keyword,
+                wake_mode=USE_WAKE_WORD,
+                oww_model=OWW_MODEL,
                 silence_threshold=STT_SILENCE_THRESHOLD,
                 silence_cutoff_sec=STT_SILENCE_CUTOFF_SEC,
             )
-            print("[WAKE] Wake word STT enabled — keyword: '{}'".format(WAKE_KEYWORD))
+            print("[WAKE] Mode: {} — keyword: '{}' oww_model: '{}'".format(USE_WAKE_WORD, WAKE_KEYWORD, OWW_MODEL))
         else:
             self.stt = AzureSTT(
                 subscription_key=AZURE_SPEECH_KEY,
@@ -263,6 +269,16 @@ class Companion:
             return
         reset_latency()
         latency_mark("text received")
+        # Strip the trigger phrase from the transcribed text (all modes)
+        if WAKE_KEYWORD:
+            pattern = r'\b' + re.escape(WAKE_KEYWORD.lower()) + r'\b'
+            text = re.sub(pattern, '', text, count=1, flags=re.IGNORECASE).strip()
+            text = text.lstrip(",.;:!? ").strip()
+            # In VAD mode: reject if trigger phrase wasn't found (noise false trigger)
+            # In openWakeWord/Vosk mode: the model already confirmed the wake word
+            if USE_WAKE_WORD == "vad" and not text:
+                print(f"[INPUT] Ignored — VAD triggered but no content after stripping '{WAKE_KEYWORD}'")
+                return
         if self.ptt_active or True:  # always process when enabled; PTT gates STT start/stop
             self._process_input(text)
 

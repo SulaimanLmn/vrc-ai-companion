@@ -155,6 +155,18 @@ def _list_windows():
         return []
 
 
+def _list_oww_models():
+    """Return list of model names from models/openwakeword/ directory."""
+    import os
+    import glob
+    model_dir = os.path.join(os.path.dirname(__file__), "..", "models", "openwakeword")
+    models = []
+    for f in glob.glob(os.path.join(model_dir, "*.onnx")) + glob.glob(os.path.join(model_dir, "*.tflite")):
+        name = os.path.splitext(os.path.basename(f))[0]
+        models.append({"name": name, "file": os.path.basename(f)})
+    return models
+
+
 CONFIG_UI = [
     {"key": "LLM_API_KEY", "label": "LLM API Key", "type": "password", "section": "llm"},
     {"key": "LLM_BASE_URL", "label": "API Base URL", "type": "text", "section": "llm"},
@@ -179,8 +191,9 @@ CONFIG_UI = [
     {"key": "TTS_PITCH", "label": "Voice Pitch (%)", "type": "range", "min": -50, "max": 50, "step": 5, "section": "tts"},
     {"key": "VISION_TRIGGER_PHRASE", "label": "Screen Capture Phrase", "type": "text", "section": "vision"},
     {"key": "VISION_CAPTURE_WINDOW", "label": "Window to Capture", "type": "dropdown", "options_key": "windows", "section": "vision"},
-    {"key": "ACTIVATION_PHRASE", "label": "Text Filter (phrase to respond to)", "type": "text", "section": "general", "note": "Empty = respond to everything"},
-    {"key": "WAKE_KEYWORD", "label": "Wake Word (Vosk)", "type": "text", "section": "general", "note": "Empty = energy VAD fallback"},
+    {"key": "USE_WAKE_WORD", "label": "Wake Word Detection", "type": "dropdown", "options": ["vosk", "vad", "openwakeword"], "section": "general", "note": "vosk = Vosk keyphrase, vad = energy VAD + text filter, openwakeword = requires model"},
+    {"key": "WAKE_KEYWORD", "label": "Trigger Phrase", "type": "text", "section": "general", "note": "Used by Vosk keyphrase or VAD text filter", "show_when": "vosk,vad"},
+    {"key": "OWW_MODEL", "label": "openWakeWord Model", "type": "dropdown", "options_key": "oww_models", "section": "general", "note": "Model to use for wake word detection", "show_when": "openwakeword"},
     {"key": "SYSTEM_PROMPT", "label": "Personality Prompt", "type": "textarea", "section": "general"},
 ]
 
@@ -212,6 +225,7 @@ def create_app(neuro):
             "ui": CONFIG_UI,
             "input_devices": _list_input_devices(),
             "windows": _list_windows(),
+            "oww_models": _list_oww_models(),
         })
 
     @app.route("/api/config", methods=["POST"])
@@ -250,7 +264,8 @@ def create_app(neuro):
         needs_restart = [
             k for k in data if k in (
                 "AUDIO_DEVICE_INDEX", "STT_CAPTURE_MODE", "LLM_MODEL",
-                "VISION_CAPTURE_WINDOW", "ACTIVATION_PHRASE", "VISION_TRIGGER_PHRASE",
+                "VISION_CAPTURE_WINDOW", "VISION_TRIGGER_PHRASE",
+                "USE_WAKE_WORD", "WAKE_KEYWORD",
             ) and data.get(k) != before.get(k)
         ]
         return jsonify({"ok": True, "needs_restart": needs_restart})
